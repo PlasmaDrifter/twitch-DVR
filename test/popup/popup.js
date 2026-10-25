@@ -176,24 +176,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     clearNeedsReload();
 
     reloadBtn.disabled = true;
-    reloadBtn.innerHTML = `
-      <svg class="spin-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-      </svg>
-    `;
+    reloadBtn.textContent = "";
+
+    const spinSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    spinSvg.setAttribute("class", "spin-icon");
+    spinSvg.setAttribute("width", "14");
+    spinSvg.setAttribute("height", "14");
+    spinSvg.setAttribute("viewBox", "0 0 24 24");
+    spinSvg.setAttribute("fill", "none");
+    spinSvg.setAttribute("stroke", "currentColor");
+    spinSvg.setAttribute("stroke-width", "2.5");
+    spinSvg.setAttribute("stroke-linecap", "round");
+    spinSvg.setAttribute("stroke-linejoin", "round");
+
+    const spinPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    spinPath.setAttribute("d", "M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67");
+    spinSvg.appendChild(spinPath);
+    reloadBtn.appendChild(spinSvg);
 
     setTimeout(() => {
-      reloadBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-      `;
+      reloadBtn.textContent = "";
+      const checkSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      checkSvg.setAttribute("width", "14");
+      checkSvg.setAttribute("height", "14");
+      checkSvg.setAttribute("viewBox", "0 0 24 24");
+      checkSvg.setAttribute("fill", "none");
+      checkSvg.setAttribute("stroke", "#10b981");
+      checkSvg.setAttribute("stroke-width", "2.5");
+      checkSvg.setAttribute("stroke-linecap", "round");
+      checkSvg.setAttribute("stroke-linejoin", "round");
+
+      const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      polyline.setAttribute("points", "20 6 9 17 4 12");
+      checkSvg.appendChild(polyline);
+      reloadBtn.appendChild(checkSvg);
+
       setTimeout(() => {
-        reloadBtn.innerHTML = `
-          <svg class="reload-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-          </svg>
-        `;
+        reloadBtn.textContent = "";
+        const reloadSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        reloadSvg.setAttribute("class", "reload-icon");
+        reloadSvg.setAttribute("width", "14");
+        reloadSvg.setAttribute("height", "14");
+        reloadSvg.setAttribute("viewBox", "0 0 24 24");
+        reloadSvg.setAttribute("fill", "none");
+        reloadSvg.setAttribute("stroke", "currentColor");
+        reloadSvg.setAttribute("stroke-width", "2.3");
+        reloadSvg.setAttribute("stroke-linecap", "round");
+        reloadSvg.setAttribute("stroke-linejoin", "round");
+
+        const reloadPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        reloadPath.setAttribute("d", "M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67");
+        reloadSvg.appendChild(reloadPath);
+        reloadBtn.appendChild(reloadSvg);
         reloadBtn.disabled = false;
       }, 800);
     }, 450);

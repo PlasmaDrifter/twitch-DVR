@@ -62,6 +62,16 @@
     return null;
   }
 
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  function createSvgElement(tag, attrs = {}) {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const [key, val] of Object.entries(attrs)) {
+      el.setAttribute(key, val);
+    }
+    return el;
+  }
+
   function showHud(text) {
     let hud = document.getElementById("twitch-dvr-hud");
     if (!hud) {
@@ -170,6 +180,30 @@
     }
   }
 
+  function renderLiveBadgeDOM(btn, isRewound) {
+    btn.textContent = "";
+    if (isRewound) {
+      btn.className = "tdvr-live-badge rewound";
+      const icon = document.createElement("span");
+      icon.className = "tdvr-live-icon";
+      icon.textContent = "↺";
+      const label = document.createElement("span");
+      label.className = "tdvr-live-label";
+      label.textContent = "GO LIVE";
+      btn.append(icon, label);
+      btn.title = "Behind live stream. Click to jump to live edge!";
+    } else {
+      btn.className = "tdvr-live-badge in-sync";
+      const dot = document.createElement("span");
+      dot.className = "tdvr-radar-dot";
+      const label = document.createElement("span");
+      label.className = "tdvr-live-label";
+      label.textContent = "LIVE";
+      btn.append(dot, label);
+      btn.title = "Live Edge (In Sync)";
+    }
+  }
+
   function jumpToLive() {
     // Click Twitch's native "Skip to Live" button
     const nativeSkipBtn = document.querySelector(
@@ -183,12 +217,7 @@
 
     const liveBtn = document.getElementById("tdvr-live-badge");
     if (liveBtn) {
-      liveBtn.className = "tdvr-live-badge in-sync";
-      liveBtn.innerHTML = `
-        <span class="tdvr-radar-dot"></span>
-        <span class="tdvr-live-label">LIVE</span>
-      `;
-      liveBtn.title = "Live Edge (In Sync)";
+      renderLiveBadgeDOM(liveBtn, false);
     }
 
     showHud("Live");
@@ -272,21 +301,7 @@
 
     if (isRewound !== lastRewoundState) {
       lastRewoundState = isRewound;
-      if (isRewound) {
-        liveBtn.className = "tdvr-live-badge rewound";
-        liveBtn.innerHTML = `
-          <span class="tdvr-live-icon">↺</span>
-          <span class="tdvr-live-label">GO LIVE</span>
-        `;
-        liveBtn.title = "Behind live stream. Click to jump to live edge!";
-      } else {
-        liveBtn.className = "tdvr-live-badge in-sync";
-        liveBtn.innerHTML = `
-          <span class="tdvr-radar-dot"></span>
-          <span class="tdvr-live-label">LIVE</span>
-        `;
-        liveBtn.title = "Live Edge (In Sync)";
-      }
+      renderLiveBadgeDOM(liveBtn, isRewound);
     }
   }
 
@@ -331,11 +346,13 @@
 
     const header = document.createElement("div");
     header.className = "tdvr-flyout-header";
-    header.innerHTML = `
-      <span>Playback Speed</span>
-      <span class="tdvr-flyout-close">&times;</span>
-    `;
-    header.querySelector(".tdvr-flyout-close").addEventListener("click", closeSpeedFlyout);
+    const headerTitle = document.createElement("span");
+    headerTitle.textContent = "Playback Speed";
+    const closeBtn = document.createElement("span");
+    closeBtn.className = "tdvr-flyout-close";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", closeSpeedFlyout);
+    header.append(headerTitle, closeBtn);
     flyout.appendChild(header);
 
     const list = document.createElement("div");
@@ -346,10 +363,13 @@
       item.type = "button";
       item.className = `tdvr-speed-menu-item ${Math.abs(spd - targetSpeed) < 0.05 ? "active" : ""}`;
       item.dataset.speed = String(spd);
-      item.innerHTML = `
-        <span class="tdvr-speed-text">${spd === 1.0 ? "Normal (1x)" : `${spd}x`}</span>
-        <span class="tdvr-speed-check">✓</span>
-      `;
+      const textSpan = document.createElement("span");
+      textSpan.className = "tdvr-speed-text";
+      textSpan.textContent = spd === 1.0 ? "Normal (1x)" : `${spd}x`;
+      const checkSpan = document.createElement("span");
+      checkSpan.className = "tdvr-speed-check";
+      checkSpan.textContent = "✓";
+      item.append(textSpan, checkSpan);
       item.addEventListener("click", (e) => {
         e.stopPropagation();
         setPlaybackSpeed(spd);
@@ -388,23 +408,52 @@
     const speedRow = document.createElement("div");
     speedRow.id = "tdvr-twitch-settings-speed-row";
     speedRow.className = "tdvr-twitch-menu-row";
-    speedRow.innerHTML = `
-      <div class="tdvr-twitch-menu-btn">
-        <div class="tdvr-twitch-menu-left">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-          <span>Playback Speed (DVR)</span>
-        </div>
-        <div class="tdvr-twitch-menu-right">
-          <span id="tdvr-twitch-settings-speed-val">${targetSpeed}x</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        </div>
-      </div>
-    `;
+
+    const menuBtn = document.createElement("div");
+    menuBtn.className = "tdvr-twitch-menu-btn";
+
+    const menuLeft = document.createElement("div");
+    menuLeft.className = "tdvr-twitch-menu-left";
+
+    const clockSvg = createSvgElement("svg", {
+      width: "15",
+      height: "15",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    });
+    const circle = createSvgElement("circle", { cx: "12", cy: "12", r: "10" });
+    const polyline = createSvgElement("polyline", { points: "12 6 12 12 16 14" });
+    clockSvg.append(circle, polyline);
+
+    const titleSpan = document.createElement("span");
+    titleSpan.textContent = "Playback Speed (DVR)";
+    menuLeft.append(clockSvg, titleSpan);
+
+    const menuRight = document.createElement("div");
+    menuRight.className = "tdvr-twitch-menu-right";
+
+    const valSpan = document.createElement("span");
+    valSpan.id = "tdvr-twitch-settings-speed-val";
+    valSpan.textContent = `${targetSpeed}x`;
+
+    const chevronSvg = createSvgElement("svg", {
+      width: "14",
+      height: "14",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+    });
+    const chevronPolyline = createSvgElement("polyline", { points: "9 18 15 12 9 6" });
+    chevronSvg.append(chevronPolyline);
+
+    menuRight.append(valSpan, chevronSvg);
+    menuBtn.append(menuLeft, menuRight);
+    speedRow.appendChild(menuBtn);
 
     speedRow.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -463,13 +512,26 @@
       btn1.type = "button";
       btn1.className = "tdvr-icon-btn";
       btn1.title = `Rewind ${step}s (J or Left Arrow)`;
-      btn1.innerHTML = `
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 19 2 12 11 5 11 19"></polygon>
-          <polygon points="22 19 13 12 22 5 22 19"></polygon>
-        </svg>
-        <span class="tdvr-btn-label">${step}s</span>
-      `;
+
+      const svg1 = createSvgElement("svg", {
+        width: "13",
+        height: "13",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.4",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      });
+      const poly1a = createSvgElement("polygon", { points: "11 19 2 12 11 5 11 19" });
+      const poly1b = createSvgElement("polygon", { points: "22 19 13 12 22 5 22 19" });
+      svg1.append(poly1a, poly1b);
+
+      const label1 = document.createElement("span");
+      label1.className = "tdvr-btn-label";
+      label1.textContent = `${step}s`;
+      btn1.append(svg1, label1);
+
       btn1.addEventListener("click", (e) => {
         e.stopPropagation();
         seekRelative(-step);
@@ -480,13 +542,26 @@
       btn2.type = "button";
       btn2.className = "tdvr-icon-btn";
       btn2.title = "Rewind 30s (Shift + Left Arrow)";
-      btn2.innerHTML = `
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 19 2 12 11 5 11 19"></polygon>
-          <polygon points="22 19 13 12 22 5 22 19"></polygon>
-        </svg>
-        <span class="tdvr-btn-label">30s</span>
-      `;
+
+      const svg2 = createSvgElement("svg", {
+        width: "13",
+        height: "13",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.4",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      });
+      const poly2a = createSvgElement("polygon", { points: "11 19 2 12 11 5 11 19" });
+      const poly2b = createSvgElement("polygon", { points: "22 19 13 12 22 5 22 19" });
+      svg2.append(poly2a, poly2b);
+
+      const label2 = document.createElement("span");
+      label2.className = "tdvr-btn-label";
+      label2.textContent = "30s";
+      btn2.append(svg2, label2);
+
       btn2.addEventListener("click", (e) => {
         e.stopPropagation();
         seekRelative(-30);
@@ -498,24 +573,33 @@
       speedTrigger.id = "tdvr-speed-trigger-btn";
       speedTrigger.className = "tdvr-speed-trigger";
       speedTrigger.title = "Playback Speed. Click to choose multiplier (0.5x - 2x).";
-      speedTrigger.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span id="tdvr-speed-trigger-text">${targetSpeed}x</span>
-      `;
+
+      const speedSvg = createSvgElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.2",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      });
+      const speedCircle = createSvgElement("circle", { cx: "12", cy: "12", r: "10" });
+      const speedPoly = createSvgElement("polyline", { points: "12 6 12 12 16 14" });
+      speedSvg.append(speedCircle, speedPoly);
+
+      const speedText = document.createElement("span");
+      speedText.id = "tdvr-speed-trigger-text";
+      speedText.textContent = `${targetSpeed}x`;
+      speedTrigger.append(speedSvg, speedText);
+
       speedTrigger.addEventListener("click", toggleSpeedFlyout);
 
       // 4. Live / Go Live Badge
       const liveBadge = document.createElement("button");
       liveBadge.type = "button";
       liveBadge.id = "tdvr-live-badge";
-      liveBadge.className = "tdvr-live-badge in-sync";
-      liveBadge.innerHTML = `
-        <span class="tdvr-radar-dot"></span>
-        <span class="tdvr-live-label">LIVE</span>
-      `;
+      renderLiveBadgeDOM(liveBadge, false);
       liveBadge.addEventListener("click", (e) => {
         e.stopPropagation();
         jumpToLive();
