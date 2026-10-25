@@ -32,11 +32,11 @@ Install directly from the official Mozilla Add-ons directory:
 
 ## Screenshots
 
-### In-Player DVR Controls & Speed Flyout
-![Twitch DVR Player Controls](store_assets/player-controls-preview.png)
+### Live Stream In-Player Controls & Timeline Scrubbing
+![Twitch DVR Live Player Controls](store_assets/twitch-player-live.jpg)
 
-### Extension Popup Settings & Hotkey Configuration
-![Twitch DVR Popup Showcase](store_assets/popup-showcase.png)
+### Extension Settings Popup
+<img src="store_assets/twitch-dvr-popup.png" alt="Twitch DVR Settings Popup" width="340" />
 
 ---
 
@@ -88,10 +88,8 @@ twitch-DVR/
 ├── store_assets/
 │   ├── icon-128.png
 │   ├── icon-512.png
-│   ├── popup-preview.png
-│   ├── popup-showcase.png
-│   ├── player-controls-preview.png
-│   └── controls-focused.png
+│   ├── twitch-player-live.jpg
+│   └── twitch-dvr-popup.png
 └── test/
     ├── manifest.json
     ├── background.js
