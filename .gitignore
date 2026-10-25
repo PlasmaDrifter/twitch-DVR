@@ -1,0 +1,13 @@
+# Build archives
+release/*.zip
+release/*.xpi
+test/*.zip
+test/*.xpi
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

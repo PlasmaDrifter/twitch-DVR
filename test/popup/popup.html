@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch DVR</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      width: 305px;
+      padding: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f0f13;
+      color: #efeff1;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 11px;
+      border-bottom: 1px solid #1e1e26;
+      margin-bottom: 12px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: #9146ff;
+      flex-shrink: 0;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      color: #ffffff;
+    }
+
+    .version-tag {
+      font-size: 10px;
+      font-weight: 600;
+      color: #9146ff;
+      background: rgba(145, 70, 255, 0.12);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* Reload Button */
+    .reload-icon-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      background: #17171e;
+      border: 1px solid #272734;
+      color: #9494a8;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.15s ease;
+    }
+
+    .reload-icon-btn:hover:not(:disabled) {
+      background: #20202a;
+      border-color: #3b3b4d;
+      color: #ffffff;
+    }
+
+    .reload-icon-btn:active:not(:disabled) {
+      transform: scale(0.93);
+    }
+
+    .reload-icon-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      border-color: #1e1e26;
+    }
+
+    .reload-icon-btn.highlight {
+      background: #9146ff;
+      border-color: #a970ff;
+      color: #ffffff;
+    }
+
+    /* Status Panel */
+    .status-card {
+      background: #15151c;
+      border: 1px solid #23232e;
+      border-radius: 6px;
+      padding: 9px 11px;
+      margin-bottom: 12px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .status-channel-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      overflow: hidden;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #5c5c6e;
+      flex-shrink: 0;
+    }
+
+    .status-dot.active {
+      background: #10b981;
+    }
+
+    .status-dot.warn {
+      background: #f59e0b;
+    }
+
+    .status-channel {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-subtext {
+      font-size: 11px;
+      color: #7d7d8e;
+      margin-top: 3px;
+      line-height: 1.3;
+    }
+
+    /* Settings List */
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toggle-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #1a1a22;
+      transition: opacity 0.15s ease;
+    }
+
+    .toggle-card:last-child {
+      border-bottom: none;
+    }
+
+    .toggle-card.disabled {
+      opacity: 0.35;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+
+    .label-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding-right: 10px;
+    }
+
+    .setting-label {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #efeff1;
+    }
+
+    .setting-desc {
+      font-size: 10.5px;
+      color: #7d7d8e;
+      line-height: 1.25;
+      margin-top: 1px;
+    }
+
+    /* Slider Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #272734;
+      transition: background-color 0.15s ease;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #9494a8;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #9146ff;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+      background-color: #ffffff;
+    }
+
+    /* Seek Step Segmented Card */
+    .option-card {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 8px 0;
+      border-bottom: 1px solid #1a1a22;
+      transition: opacity 0.15s ease;
+    }
+
+    .option-card.disabled {
+      opacity: 0.35;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+
+    .step-chips {
+      display: flex;
+      background: #15151c;
+      border: 1px solid #23232e;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+
+    .step-chip {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-right: 1px solid #23232e;
+      color: #9494a8;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 0;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .step-chip:last-child {
+      border-right: none;
+    }
+
+    .step-chip:hover:not(.active) {
+      color: #ffffff;
+      background: #1c1c24;
+    }
+
+    .step-chip.active {
+      background: #9146ff;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .spin-icon {
+      animation: spin 0.75s linear infinite;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="brand-dot"></div>
+      <div class="title-group">
+        <span class="title">Twitch DVR</span>
+        <span class="version-tag">1.0</span>
+      </div>
+    </div>
+    <button id="reload-tab-btn" class="reload-icon-btn" type="button" title="Reload Twitch Tab" aria-label="Reload Twitch Tab">
+      <svg class="reload-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+      </svg>
+    </button>
+  </div>
+
+  <!-- Live Status Card -->
+  <div class="status-card" id="status-card">
+    <div class="status-row">
+      <div class="status-channel-wrap">
+        <span class="status-dot" id="status-dot"></span>
+        <span class="status-channel" id="status-channel">Connecting...</span>
+      </div>
+    </div>
+    <div class="status-subtext" id="status-subtext">Waiting for Twitch stream...</div>
+  </div>
+
+  <div class="settings-list">
+    <!-- Enable Extension -->
+    <div class="toggle-card" id="main-toggle-card">
+      <div class="label-group">
+        <span class="setting-label">Enable Twitch DVR</span>
+      </div>
+      <label class="switch" for="toggle-enabled">
+        <input type="checkbox" id="toggle-enabled" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Force DVR Without Login -->
+    <div class="toggle-card" id="incognito-mode-card">
+      <div class="label-group">
+        <span class="setting-label">Force DVR (Incognito)</span>
+        <span class="setting-desc">Enable DVR when logged out or guest</span>
+      </div>
+      <label class="switch" for="toggle-incognito-mode">
+        <input type="checkbox" id="toggle-incognito-mode" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- In-Player Controls & Speed Multipliers -->
+    <div class="toggle-card" id="player-buttons-card">
+      <div class="label-group">
+        <span class="setting-label">In-Player Bar & Speeds</span>
+        <span class="setting-desc">Rewind buttons, speed popover, live badge</span>
+      </div>
+      <label class="switch" for="toggle-player-buttons">
+        <input type="checkbox" id="toggle-player-buttons" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="toggle-card" id="hotkeys-card">
+      <div class="label-group">
+        <span class="setting-label">Keyboard Shortcuts</span>
+        <span class="setting-desc">J/L seek, Shift+L live, [/] speeds</span>
+      </div>
+      <label class="switch" for="toggle-hotkeys">
+        <input type="checkbox" id="toggle-hotkeys" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Primary Seek Step Chips -->
+    <div class="option-card" id="seek-step-card">
+      <span class="setting-label">Primary Seek Step</span>
+      <div class="step-chips">
+        <button type="button" class="step-chip" data-step="5">5s</button>
+        <button type="button" class="step-chip active" data-step="10">10s</button>
+        <button type="button" class="step-chip" data-step="15">15s</button>
+        <button type="button" class="step-chip" data-step="30">30s</button>
+      </div>
+    </div>
+
+    <!-- Prevent Home Autoplay -->
+    <div class="toggle-card" id="home-autoplay-card">
+      <div class="label-group">
+        <span class="setting-label">Prevent Home Autoplay</span>
+        <span class="setting-desc">Block frontpage carousel stream</span>
+      </div>
+      <label class="switch" for="toggle-prevent-home-autoplay">
+        <input type="checkbox" id="toggle-prevent-home-autoplay">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
