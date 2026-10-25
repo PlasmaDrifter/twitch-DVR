@@ -4,13 +4,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   const incognitoModeCard = document.getElementById("incognito-mode-card");
   const togglePlayerButtons = document.getElementById("toggle-player-buttons");
   const playerButtonsCard = document.getElementById("player-buttons-card");
+  const toggleSpeedButton = document.getElementById("toggle-speed-button");
+  const speedButtonCard = document.getElementById("speed-button-card");
   const toggleHotkeys = document.getElementById("toggle-hotkeys");
   const hotkeysCard = document.getElementById("hotkeys-card");
   const seekStepCard = document.getElementById("seek-step-card");
   const stepChips = document.querySelectorAll(".step-chip");
+  const rewindButtonsCard = document.getElementById("rewind-buttons-card");
+  const rewindInputs = document.querySelectorAll("#rewind-buttons-card input");
+  const forwardButtonsCard = document.getElementById("forward-buttons-card");
+  const forwardInputs = document.querySelectorAll("#forward-buttons-card input");
+  const shortcutsCard = document.getElementById("shortcuts-card");
   const toggleHomeAutoplay = document.getElementById("toggle-prevent-home-autoplay");
   const homeAutoplayCard = document.getElementById("home-autoplay-card");
   const reloadBtn = document.getElementById("reload-tab-btn");
+
+  const tabBtnControls = document.getElementById("tab-btn-controls");
+  const tabBtnShortcuts = document.getElementById("tab-btn-shortcuts");
+  const tabControls = document.getElementById("tab-controls");
+  const tabShortcuts = document.getElementById("tab-shortcuts");
 
   const statusDot = document.getElementById("status-dot");
   const statusChannel = document.getElementById("status-channel");
@@ -19,21 +31,60 @@ document.addEventListener("DOMContentLoaded", async () => {
   let activeTwitchTabId = null;
   let isInitialized = false;
 
+  function switchTab(tabName) {
+    if (tabName === "shortcuts") {
+      tabBtnShortcuts.classList.add("active");
+      tabBtnControls.classList.remove("active");
+      tabShortcuts.classList.add("active");
+      tabControls.classList.remove("active");
+    } else {
+      tabBtnControls.classList.add("active");
+      tabBtnShortcuts.classList.remove("active");
+      tabControls.classList.add("active");
+      tabShortcuts.classList.remove("active");
+    }
+  }
+
+  if (tabBtnControls && tabBtnShortcuts) {
+    tabBtnControls.addEventListener("click", () => switchTab("controls"));
+    tabBtnShortcuts.addEventListener("click", () => switchTab("shortcuts"));
+  }
+
   function updateDependencies(isEnabled) {
-    const cards = [incognitoModeCard, playerButtonsCard, hotkeysCard, seekStepCard, homeAutoplayCard];
-    const inputs = [toggleIncognitoMode, togglePlayerButtons, toggleHotkeys, toggleHomeAutoplay];
+    const cards = [
+      incognitoModeCard,
+      playerButtonsCard,
+      speedButtonCard,
+      rewindButtonsCard,
+      forwardButtonsCard,
+      hotkeysCard,
+      seekStepCard,
+      homeAutoplayCard,
+      shortcutsCard,
+    ];
+    const inputs = [toggleIncognitoMode, togglePlayerButtons, toggleSpeedButton, toggleHotkeys, toggleHomeAutoplay];
 
     cards.forEach((c) => {
-      if (isEnabled) c.classList.remove("disabled");
-      else c.classList.add("disabled");
+      if (c) {
+        if (isEnabled) c.classList.remove("disabled");
+        else c.classList.add("disabled");
+      }
     });
 
     inputs.forEach((inp) => {
-      inp.disabled = !isEnabled;
+      if (inp) inp.disabled = !isEnabled;
     });
 
     stepChips.forEach((chip) => {
       chip.disabled = !isEnabled;
+    });
+
+    rewindInputs.forEach((inp) => {
+      inp.disabled = !isEnabled;
+    });
+
+    forwardInputs.forEach((inp) => {
+      inp.disabled = !isEnabled;
     });
   }
 
@@ -85,8 +136,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableInIncognitoMode: true,
     preventHomeAutoplay: false,
     enablePlayerButtons: true,
+    enableSpeedButton: true,
     enableHotkeys: true,
     seekStepSeconds: 10,
+    rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
+    forwardButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
     streamStatus: null,
   });
 
@@ -98,11 +152,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? res.workWithoutLogin === true
         : true;
   togglePlayerButtons.checked = res.enablePlayerButtons !== false;
+  toggleSpeedButton.checked = res.enableSpeedButton !== false;
   toggleHotkeys.checked = res.enableHotkeys !== false;
   toggleHomeAutoplay.checked = res.preventHomeAutoplay === true;
 
   const currentStep = res.seekStepSeconds || 10;
   setSelectedStep(currentStep);
+
+  const savedRewind = res.rewindButtons || { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false };
+  rewindInputs.forEach((inp) => {
+    const stepKey = inp.dataset.step;
+    inp.checked = savedRewind[stepKey] === true;
+  });
+
+  const savedForward = res.forwardButtons || { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false };
+  forwardInputs.forEach((inp) => {
+    const stepKey = inp.dataset.step;
+    inp.checked = savedForward[stepKey] === true;
+  });
 
   updateDependencies(toggle.checked);
   renderStatus(res.streamStatus);
@@ -123,6 +190,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   togglePlayerButtons.addEventListener("change", async () => {
     await chrome.storage.local.set({ enablePlayerButtons: togglePlayerButtons.checked });
+  });
+
+  toggleSpeedButton.addEventListener("change", async () => {
+    await chrome.storage.local.set({ enableSpeedButton: toggleSpeedButton.checked });
+  });
+
+  rewindInputs.forEach((inp) => {
+    inp.addEventListener("change", async () => {
+      const stepKey = inp.dataset.step;
+      const data = await chrome.storage.local.get({
+        rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
+      });
+      const current = data.rewindButtons || { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false };
+      current[stepKey] = inp.checked;
+      await chrome.storage.local.set({ rewindButtons: current });
+    });
+  });
+
+  forwardInputs.forEach((inp) => {
+    inp.addEventListener("change", async () => {
+      const stepKey = inp.dataset.step;
+      const data = await chrome.storage.local.get({
+        forwardButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
+      });
+      const current = data.forwardButtons || { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false };
+      current[stepKey] = inp.checked;
+      await chrome.storage.local.set({ forwardButtons: current });
+    });
   });
 
   toggleHotkeys.addEventListener("change", async () => {

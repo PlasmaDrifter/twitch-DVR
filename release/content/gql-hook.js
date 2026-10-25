@@ -38,6 +38,65 @@
 
   let currentChannel = getChannelFromUrl();
 
+  let activeVodFetchPromise = null;
+
+  /**
+   * Proactively queries Twitch GraphQL for the channel's active recording VOD.
+   * This ensures globalThis.vodID is populated before Twitch's player checks
+   * DVRAvailabilityQuery or content.dvrVideoID, guaranteeing native seekbar activation.
+   *
+   * @param {string} channel - Channel login name
+   * @returns {Promise<string|null>} VOD ID if active recording exists
+   */
+  async function fetchVodForChannel(channel) {
+    if (!channel) return null;
+    let timeoutId = null;
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const res = await origFetch("https://gql.twitch.tv/gql", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: "query($login:String!){user(login:$login){videos(first:5,sort:TIME,type:ARCHIVE){edges{node{id createdAt status}}}}}",
+          variables: { login: channel },
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const edges = data?.data?.user?.videos?.edges;
+      if (Array.isArray(edges)) {
+        const recording = edges.find((e) => e?.node?.status === "RECORDING");
+        if (recording?.node?.id) {
+          globalThis.vodID = recording.node.id;
+          if (recording.node.createdAt) {
+            globalThis.vodCreatedAt = recording.node.createdAt;
+            try {
+              document.documentElement.dataset.twitchDvrCreatedAt = recording.node.createdAt;
+            } catch (e) { }
+          }
+          broadcastStatus();
+          return recording.node.id;
+        }
+      }
+    } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+    return null;
+  }
+
+  function startVodLookup(channel) {
+    if (!channel) return;
+    activeVodFetchPromise = fetchVodForChannel(channel);
+  }
+
   function broadcastStatus() {
     try {
       if (globalThis.vodCreatedAt) {
@@ -67,10 +126,30 @@
         delete document.documentElement.dataset.twitchDvrCreatedAt;
       } catch (e) { }
       broadcastStatus();
+      startVodLookup(newChannel);
     }
   }
 
   window.addEventListener("popstate", handleUrlChange);
+
+  try {
+    const origPushState = history.pushState;
+    history.pushState = function (...args) {
+      const ret = origPushState.apply(this, args);
+      handleUrlChange();
+      return ret;
+    };
+    const origReplaceState = history.replaceState;
+    history.replaceState = function (...args) {
+      const ret = origReplaceState.apply(this, args);
+      handleUrlChange();
+      return ret;
+    };
+  } catch (e) { }
+
+  if (currentChannel) {
+    startVodLookup(currentChannel);
+  }
 
   window.addEventListener("message", (event) => {
     if (event.source === window && event.data?.type === "TWITCH_REWIND_CONFIG") {
@@ -405,10 +484,20 @@
     }
   }
 
-  // Exact robust GQL parsing from original extension that guarantees Twitch DVR activates
+  // Exact robust GQL parsing that guarantees Twitch DVR activates
   window.fetch = async function (...args) {
+    const shouldMod = shouldModifyRequest(args);
+    if (shouldMod && !globalThis.vodID && activeVodFetchPromise) {
+      try {
+        await Promise.race([
+          activeVodFetchPromise,
+          new Promise((resolve) => setTimeout(resolve, 800)),
+        ]);
+      } catch (e) { }
+    }
+
     const response = await origFetch(...args);
-    if (!shouldModifyRequest(args)) return response;
+    if (!shouldMod) return response;
 
     const text = await response.text();
     let vodChanged = false;
@@ -418,13 +507,15 @@
         if (val?.__typename === "VideoConnection") {
           const edge = val?.edges?.[0]?.node;
           const newId = edge?.status === "RECORDING" ? edge.id : null;
-          vodChanged = globalThis.vodID !== newId;
-          globalThis.vodID = newId;
-          if (edge?.createdAt) {
-            globalThis.vodCreatedAt = edge.createdAt;
-            try {
-              document.documentElement.dataset.twitchDvrCreatedAt = edge.createdAt;
-            } catch (e) { }
+          if (newId) {
+            vodChanged = globalThis.vodID !== newId;
+            globalThis.vodID = newId;
+            if (edge?.createdAt) {
+              globalThis.vodCreatedAt = edge.createdAt;
+              try {
+                document.documentElement.dataset.twitchDvrCreatedAt = edge.createdAt;
+              } catch (e) { }
+            }
           }
         }
         return val;
@@ -445,7 +536,7 @@
       keysToForceEnable.has(key)
         ? true
         : key === "vodID"
-          ? globalThis.vodID || ""
+          ? globalThis.vodID || val || ""
           : val
     );
 

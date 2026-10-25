@@ -1,14 +1,35 @@
 // player-controls.js
 // Twitch DVR - In-player controls:
-// - All DVR controls (<< 10s, << 30s, Speed, and Live badge) centered in the bottom popup player controls bar
+// - All DVR controls (Rewind buttons, Live badge, Forward buttons, Speed) centered in player controls bar
 // - Compact speed control with popup flyout
 // - Clean LIVE / GO LIVE badge without timestamps
 (function () {
+  const REWIND_INTERVALS = [
+    { key: "30s", seconds: 30, label: "30s", title: "30s" },
+    { key: "1m", seconds: 60, label: "1m", title: "1 min" },
+    { key: "3m", seconds: 180, label: "3m", title: "3 min" },
+    { key: "5m", seconds: 300, label: "5m", title: "5 min" },
+    { key: "10m", seconds: 600, label: "10m", title: "10 min" },
+    { key: "30m", seconds: 1800, label: "30m", title: "30 min" },
+  ];
+
+  const FORWARD_INTERVALS = [
+    { key: "30s", seconds: 30, label: "30s", title: "30s" },
+    { key: "1m", seconds: 60, label: "1m", title: "1 min" },
+    { key: "3m", seconds: 180, label: "3m", title: "3 min" },
+    { key: "5m", seconds: 300, label: "5m", title: "5 min" },
+    { key: "10m", seconds: 600, label: "10m", title: "10 min" },
+    { key: "30m", seconds: 1800, label: "30m", title: "30 min" },
+  ];
+
   let settings = {
     enabled: true,
     enablePlayerButtons: true,
+    enableSpeedButton: true,
     enableHotkeys: true,
     seekStepSeconds: 10,
+    rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
+    forwardButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
   };
 
   let targetSpeed = 1.0;
@@ -21,14 +42,18 @@
       {
         enabled: true,
         enablePlayerButtons: true,
+        enableSpeedButton: true,
         enableHotkeys: true,
         seekStepSeconds: 10,
+        rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
+        forwardButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
       },
       (res) => {
         settings = { ...settings, ...res };
         if (!settings.enabled || !settings.enablePlayerButtons) {
           removeInjectedControls();
         } else {
+          removeInjectedControls();
           scheduleInjection();
         }
       }
@@ -47,10 +72,6 @@
   function getLiveEdge(video) {
     if (!video) return null;
     try {
-      if (video.buffered && video.buffered.length > 0) {
-        const bufEnd = video.buffered.end(video.buffered.length - 1);
-        if (isFinite(bufEnd) && bufEnd > 0 && bufEnd < 1e7) return bufEnd;
-      }
       if (video.seekable && video.seekable.length > 0) {
         const end = video.seekable.end(video.seekable.length - 1);
         if (isFinite(end) && end > 0 && end < 1e7) return end;
@@ -128,55 +149,127 @@
    *
    * @param {number} deltaSeconds - Number of seconds to seek (negative to rewind, positive to skip forward)
    */
+  function formatDeltaText(deltaSeconds) {
+    const symbol = deltaSeconds < 0 ? "«" : "»";
+    const abs = Math.abs(deltaSeconds);
+    if (abs >= 60 && abs % 60 === 0) {
+      return `${symbol} ${abs / 60}m`;
+    }
+    return `${symbol} ${abs}s`;
+  }
+
+  function checkIfRewound(video) {
+    if (
+      document.querySelector('button[aria-label="Skip to Live"]') ||
+      document.querySelector('button[data-a-target="player-skip-to-live-button"]') ||
+      document.querySelector('button[data-a-target="player-live-button"]') ||
+      document.querySelector('.live-indicator-container button')
+    ) {
+      return true;
+    }
+    if (video && isFinite(video.currentTime)) {
+      const liveEdge = getLiveEdge(video);
+      if (liveEdge && isFinite(liveEdge)) {
+        return (liveEdge - video.currentTime) > 4;
+      }
+      if (isFinite(video.duration) && video.duration > 0 && video.duration < 1e7) {
+        return (video.duration - video.currentTime) > 4;
+      }
+    }
+    return false;
+  }
+
   function seekRelative(deltaSeconds) {
-    const isRewound = Boolean(document.querySelector('button[aria-label="Skip to Live"]'));
     const video = getActiveVideo();
+    const isRewound = checkIfRewound(video);
 
     if (isRewound && video && isFinite(video.currentTime)) {
       // Already in DVR mode: direct relative seek
       const liveEdge = getLiveEdge(video);
-      const maxTime = liveEdge && isFinite(liveEdge) ? liveEdge : (isFinite(video.duration) && video.duration < 1e7 ? video.duration : video.currentTime);
-      video.currentTime = Math.max(0, Math.min(maxTime, video.currentTime + deltaSeconds));
+      const maxTime = liveEdge && isFinite(liveEdge) ? liveEdge : (isFinite(video.duration) && video.duration < 1e7 ? video.duration : null);
+
+      // If forward seek reaches or exceeds live boundary: jump cleanly to live
+      if (deltaSeconds > 0 && maxTime && video.currentTime + deltaSeconds >= maxTime - 2) {
+        jumpToLive();
+        return;
+      }
+
+      const clampMax = maxTime || (video.currentTime + Math.max(0, deltaSeconds));
+      video.currentTime = Math.max(0, Math.min(clampMax, video.currentTime + deltaSeconds));
       setTimeout(() => updateLiveBadge(video), 50);
 
-      const symbol = deltaSeconds < 0 ? "«" : "»";
-      showHud(`${symbol} ${Math.abs(deltaSeconds)}s`);
+      showHud(formatDeltaText(deltaSeconds));
       return;
     }
 
-    // At live edge: transition Twitch player into DVR mode at the live edge, then apply delta
+    // Seeking forward when already at live edge: show Live HUD and stay live
+    if (deltaSeconds > 0) {
+      showHud("Live");
+      return;
+    }
+
+    // At live edge and seeking backward:
+    // Interact with Twitch's seekbar at the target position to transition into DVR mode cleanly
     const seekbar = getSeekbarElement();
     if (seekbar) {
       const rect = seekbar.getBoundingClientRect();
-      const clientX = Math.round(rect.right - 1);
+      let streamDuration = null;
+
+      // 1. Check createdAt dataset attribute set by gql-hook (stream elapsed time)
+      const createdAt = document.documentElement.dataset.twitchDvrCreatedAt;
+      if (createdAt) {
+        const startMs = new Date(createdAt).getTime();
+        if (!isNaN(startMs) && startMs > 0) {
+          const elSec = (Date.now() - startMs) / 1000;
+          if (elSec > 10) streamDuration = elSec;
+        }
+      }
+
+      // 2. Fallbacks for stream duration
+      if (!streamDuration) {
+        const liveEdge = getLiveEdge(video);
+        if (liveEdge && isFinite(liveEdge) && liveEdge > 10) {
+          streamDuration = liveEdge;
+        } else if (video && isFinite(video.duration) && video.duration > 10 && video.duration < 1e7) {
+          streamDuration = video.duration;
+        }
+      }
+
+      let clientX;
+      if (streamDuration && streamDuration > 10) {
+        const targetTime = Math.max(0, streamDuration + deltaSeconds);
+        const fraction = Math.max(0.01, Math.min(0.999, targetTime / streamDuration));
+        clientX = Math.round(rect.left + fraction * rect.width);
+      } else {
+        // Fallback: proportional offset from right edge
+        const pxOffset = Math.min(rect.width * 0.8, Math.max(25, Math.abs(deltaSeconds) * 2));
+        clientX = Math.round(rect.right - pxOffset);
+      }
+
       const clientY = Math.round(rect.top + rect.height / 2);
-      const hit = document.elementFromPoint(clientX, clientY) || seekbar;
       const opts = { bubbles: true, cancelable: true, composed: true, view: window, clientX, clientY, button: 0, buttons: 1 };
       try {
-        hit.dispatchEvent(new PointerEvent("pointerdown", { ...opts, pointerId: 1, pointerType: "mouse", isPrimary: true }));
-        hit.dispatchEvent(new MouseEvent("mousedown", opts));
-        hit.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));
-        hit.dispatchEvent(new MouseEvent("mouseup", { ...opts, buttons: 0 }));
-        hit.dispatchEvent(new MouseEvent("click", { ...opts, buttons: 0 }));
+        seekbar.dispatchEvent(new PointerEvent("pointerdown", { ...opts, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+        seekbar.dispatchEvent(new MouseEvent("mousedown", opts));
+        seekbar.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));
+        seekbar.dispatchEvent(new MouseEvent("mouseup", { ...opts, buttons: 0 }));
+        seekbar.dispatchEvent(new MouseEvent("click", { ...opts, buttons: 0 }));
       } catch (e) { }
 
       setTimeout(() => {
         const vid = getActiveVideo();
         if (vid && isFinite(vid.currentTime)) {
-          vid.currentTime = Math.max(0, vid.currentTime + deltaSeconds);
           updateLiveBadge(vid);
         }
-      }, 250);
+      }, 300);
 
-      const symbol = deltaSeconds < 0 ? "«" : "»";
-      showHud(`${symbol} ${Math.abs(deltaSeconds)}s`);
+      showHud(formatDeltaText(deltaSeconds));
       return;
     }
 
     if (video && isFinite(video.currentTime)) {
       video.currentTime = Math.max(0, video.currentTime + deltaSeconds);
-      const symbol = deltaSeconds < 0 ? "«" : "»";
-      showHud(`${symbol} ${Math.abs(deltaSeconds)}s`);
+      showHud(formatDeltaText(deltaSeconds));
     }
   }
 
@@ -207,10 +300,25 @@
   function jumpToLive() {
     // Click Twitch's native "Skip to Live" button
     const nativeSkipBtn = document.querySelector(
-      'button[aria-label="Skip to Live"], [data-a-target="player-live-badge"], .live-indicator, .video-player__live-indicator'
+      'button[aria-label="Skip to Live"], [data-a-target="player-live-badge"], [data-a-target="player-skip-to-live-button"], [data-a-target="player-live-button"], .live-indicator-container button, .live-indicator, .video-player__live-indicator'
     );
     if (nativeSkipBtn) {
       try { nativeSkipBtn.click(); } catch (e) { }
+    } else {
+      const seekbar = getSeekbarElement();
+      if (seekbar) {
+        const rect = seekbar.getBoundingClientRect();
+        const clientX = Math.round(rect.right - 1);
+        const clientY = Math.round(rect.top + rect.height / 2);
+        const opts = { bubbles: true, cancelable: true, composed: true, view: window, clientX, clientY, button: 0, buttons: 1 };
+        try {
+          seekbar.dispatchEvent(new PointerEvent("pointerdown", { ...opts, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+          seekbar.dispatchEvent(new MouseEvent("mousedown", opts));
+          seekbar.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));
+          seekbar.dispatchEvent(new MouseEvent("mouseup", { ...opts, buttons: 0 }));
+          seekbar.dispatchEvent(new MouseEvent("click", { ...opts, buttons: 0 }));
+        } catch (e) { }
+      }
     }
 
     setPlaybackSpeed(1.0);
@@ -287,17 +395,7 @@
 
     if (liveBtn.style.display !== "inline-flex") liveBtn.style.display = "inline-flex";
 
-    let isRewound = Boolean(document.querySelector('button[aria-label="Skip to Live"]'));
-    if (!isRewound) {
-      const liveEdge = getLiveEdge(video);
-      if (liveEdge && isFinite(liveEdge)) {
-        const latency = liveEdge - video.currentTime;
-        isRewound = isFinite(latency) && latency > 4 && latency < 86400;
-      } else if (isFinite(video.duration) && video.duration > 0 && video.duration < 1e7) {
-        const latency = video.duration - video.currentTime;
-        isRewound = isFinite(latency) && latency > 4;
-      }
-    }
+    const isRewound = checkIfRewound(video);
 
     if (isRewound !== lastRewoundState) {
       lastRewoundState = isRewound;
@@ -311,6 +409,14 @@
 
     const speedMenu = document.getElementById("tdvr-speed-flyout");
     if (speedMenu) speedMenu.remove();
+
+    const settingsRow = document.getElementById("tdvr-twitch-settings-speed-row");
+    if (settingsRow) settingsRow.remove();
+
+    const hud = document.getElementById("twitch-dvr-hud");
+    if (hud) hud.remove();
+
+    lastRewoundState = null;
   }
 
   // -------------------------------------------------------------
@@ -400,6 +506,7 @@
   );
 
   function injectIntoTwitchSettingsMenu() {
+    if (settings.enableSpeedButton === false) return;
     const twitchMenu = document.querySelector('[data-a-target="player-settings-menu"], .player-settings-menu');
     if (!twitchMenu || document.getElementById("tdvr-twitch-settings-speed-row")) return;
 
@@ -505,69 +612,93 @@
       centerWrap.id = "tdvr-center-controls";
       centerWrap.className = "tdvr-center-controls";
 
-      const step = settings.seekStepSeconds || 10;
+      // Dynamic In-Player Rewind Buttons (defaults: 1m and 5m, plus any checked in popup)
+      const rewindConfig = settings.rewindButtons || { "1m": true, "5m": true };
+      const activeIntervals = REWIND_INTERVALS.filter((item) => rewindConfig[item.key]);
 
-      // 1. Rewind Button 1 (<< 10s)
-      const btn1 = document.createElement("button");
-      btn1.type = "button";
-      btn1.className = "tdvr-icon-btn";
-      btn1.title = `Rewind ${step}s (J or Left Arrow)`;
+      activeIntervals.forEach((item) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tdvr-icon-btn";
+        btn.title = `Rewind ${item.title}`;
 
-      const svg1 = createSvgElement("svg", {
-        width: "13",
-        height: "13",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        "stroke-width": "2.4",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
+        const svg = createSvgElement("svg", {
+          width: "13",
+          height: "13",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": "2.4",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+        });
+        const polyA = createSvgElement("polygon", { points: "11 19 2 12 11 5 11 19" });
+        const polyB = createSvgElement("polygon", { points: "22 19 13 12 22 5 22 19" });
+        svg.append(polyA, polyB);
+
+        const label = document.createElement("span");
+        label.className = "tdvr-btn-label";
+        label.textContent = item.label;
+        btn.append(svg, label);
+
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          seekRelative(-item.seconds);
+        });
+
+        centerWrap.appendChild(btn);
       });
-      const poly1a = createSvgElement("polygon", { points: "11 19 2 12 11 5 11 19" });
-      const poly1b = createSvgElement("polygon", { points: "22 19 13 12 22 5 22 19" });
-      svg1.append(poly1a, poly1b);
 
-      const label1 = document.createElement("span");
-      label1.className = "tdvr-btn-label";
-      label1.textContent = `${step}s`;
-      btn1.append(svg1, label1);
-
-      btn1.addEventListener("click", (e) => {
+      // Live / Go Live Badge
+      const liveBadge = document.createElement("button");
+      liveBadge.type = "button";
+      liveBadge.id = "tdvr-live-badge";
+      renderLiveBadgeDOM(liveBadge, false);
+      liveBadge.addEventListener("click", (e) => {
         e.stopPropagation();
-        seekRelative(-step);
+        jumpToLive();
       });
 
-      // 2. Rewind Button 2 (<< 30s)
-      const btn2 = document.createElement("button");
-      btn2.type = "button";
-      btn2.className = "tdvr-icon-btn";
-      btn2.title = "Rewind 30s (Shift + Left Arrow)";
+      // Dynamic In-Player Forward Buttons (defaults: 1m and 5m, plus any checked in popup)
+      const forwardConfig = settings.forwardButtons || { "1m": true, "5m": true };
+      const activeForward = FORWARD_INTERVALS.filter((item) => forwardConfig[item.key]);
 
-      const svg2 = createSvgElement("svg", {
-        width: "13",
-        height: "13",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        "stroke-width": "2.4",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
+      const forwardButtons = [];
+      activeForward.forEach((item) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tdvr-icon-btn";
+        btn.title = `Forward ${item.title}`;
+
+        const label = document.createElement("span");
+        label.className = "tdvr-btn-label";
+        label.textContent = item.label;
+
+        const svg = createSvgElement("svg", {
+          width: "13",
+          height: "13",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": "2.4",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round",
+        });
+        const polyA = createSvgElement("polygon", { points: "13 19 22 12 13 5 13 19" });
+        const polyB = createSvgElement("polygon", { points: "2 19 11 12 2 5 2 19" });
+        svg.append(polyB, polyA);
+
+        btn.append(label, svg);
+
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          seekRelative(item.seconds);
+        });
+
+        forwardButtons.push(btn);
       });
-      const poly2a = createSvgElement("polygon", { points: "11 19 2 12 11 5 11 19" });
-      const poly2b = createSvgElement("polygon", { points: "22 19 13 12 22 5 22 19" });
-      svg2.append(poly2a, poly2b);
 
-      const label2 = document.createElement("span");
-      label2.className = "tdvr-btn-label";
-      label2.textContent = "30s";
-      btn2.append(svg2, label2);
-
-      btn2.addEventListener("click", (e) => {
-        e.stopPropagation();
-        seekRelative(-30);
-      });
-
-      // 3. Compact Speed Trigger Button
+      // Compact Speed Trigger Button
       const speedTrigger = document.createElement("button");
       speedTrigger.type = "button";
       speedTrigger.id = "tdvr-speed-trigger-btn";
@@ -595,21 +726,12 @@
 
       speedTrigger.addEventListener("click", toggleSpeedFlyout);
 
-      // 4. Live / Go Live Badge
-      const liveBadge = document.createElement("button");
-      liveBadge.type = "button";
-      liveBadge.id = "tdvr-live-badge";
-      renderLiveBadgeDOM(liveBadge, false);
-      liveBadge.addEventListener("click", (e) => {
-        e.stopPropagation();
-        jumpToLive();
-      });
-
-      // Centered layout: << 10s -> << 30s -> Live -> Speed (1x)
-      centerWrap.appendChild(btn1);
-      centerWrap.appendChild(btn2);
+      // Centered layout: [Rewind Buttons] -> [LIVE Badge] -> [Forward Buttons] -> [Speed Trigger]
       centerWrap.appendChild(liveBadge);
-      centerWrap.appendChild(speedTrigger);
+      forwardButtons.forEach((btn) => centerWrap.appendChild(btn));
+      if (settings.enableSpeedButton !== false) {
+        centerWrap.appendChild(speedTrigger);
+      }
 
       controlsRow.appendChild(centerWrap);
       lastRewoundState = null;
@@ -671,7 +793,7 @@
 
   window.addEventListener("popstate", scheduleInjection);
   setInterval(() => {
-    if (!document.getElementById("tdvr-center-controls")) {
+    if (settings.enabled && settings.enablePlayerButtons && !document.getElementById("tdvr-center-controls")) {
       scheduleInjection();
     }
   }, 1500);

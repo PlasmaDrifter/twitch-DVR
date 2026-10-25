@@ -309,6 +309,173 @@
       font-weight: 600;
     }
 
+    /* In-Player Rewind Checkboxes */
+    .rewind-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 5px;
+    }
+
+    .rewind-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 6px;
+      background: #15151c;
+      border: 1px solid #23232e;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .rewind-item:hover {
+      background: #1c1c24;
+      border-color: #3b3b4d;
+    }
+
+    .rewind-item input {
+      display: none;
+    }
+
+    .rewind-checkbox-box {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid #4a4a5e;
+      background: #101015;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+      color: #ffffff;
+    }
+
+    .rewind-check-icon {
+      opacity: 0;
+      transform: scale(0.6);
+      transition: all 0.15s ease;
+    }
+
+    .rewind-item input:checked + .rewind-checkbox-box {
+      background: #9146ff;
+      border-color: #9146ff;
+    }
+
+    .rewind-item input:checked + .rewind-checkbox-box .rewind-check-icon {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .rewind-item:has(input:checked) {
+      border-color: rgba(145, 70, 255, 0.45);
+      background: rgba(145, 70, 255, 0.08);
+    }
+
+    .rewind-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: #efeff1;
+      white-space: nowrap;
+    }
+
+    /* Tabs Bar */
+    .tabs-bar {
+      display: flex;
+      border-bottom: 1px solid #1e1e26;
+      margin-bottom: 10px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #9494a8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 0;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: #efeff1;
+    }
+
+    .tab-btn.active {
+      color: #ffffff;
+      border-bottom-color: #9146ff;
+    }
+
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    /* Shortcuts Cheatsheet Card */
+    .shortcuts-card {
+      background: #15151c;
+      border: 1px solid #23232e;
+      border-radius: 6px;
+      padding: 9px 10px;
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shortcuts-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #9146ff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .shortcut-keys {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      color: #9494a8;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    kbd {
+      background: #20202b;
+      border: 1px solid #363647;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #efeff1;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .shortcut-desc {
+      color: #b8b8c7;
+      font-size: 11px;
+      font-weight: 500;
+      text-align: right;
+    }
+
     @keyframes spin {
       100% {
         transform: rotate(360deg);
@@ -348,75 +515,259 @@
     <div class="status-subtext" id="status-subtext">Waiting for Twitch stream...</div>
   </div>
 
-  <div class="settings-list">
-    <!-- Enable Extension -->
-    <div class="toggle-card" id="main-toggle-card">
-      <div class="label-group">
-        <span class="setting-label">Enable Twitch DVR</span>
-      </div>
-      <label class="switch" for="toggle-enabled">
-        <input type="checkbox" id="toggle-enabled" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
+  <!-- Tab Navigation -->
+  <div class="tabs-bar">
+    <button type="button" class="tab-btn active" id="tab-btn-controls">Player Controls</button>
+    <button type="button" class="tab-btn" id="tab-btn-shortcuts">Shortcuts</button>
+  </div>
 
-    <!-- Force DVR Without Login -->
-    <div class="toggle-card" id="incognito-mode-card">
-      <div class="label-group">
-        <span class="setting-label">Force DVR (Incognito)</span>
-        <span class="setting-desc">Enable DVR when logged out or guest</span>
+  <!-- Tab 1: Controls Panel -->
+  <div class="tab-panel active" id="tab-controls">
+    <div class="settings-list">
+      <!-- Enable Extension -->
+      <div class="toggle-card" id="main-toggle-card">
+        <div class="label-group">
+          <span class="setting-label">Enable Twitch DVR</span>
+        </div>
+        <label class="switch" for="toggle-enabled">
+          <input type="checkbox" id="toggle-enabled" checked>
+          <span class="slider"></span>
+        </label>
       </div>
-      <label class="switch" for="toggle-incognito-mode">
-        <input type="checkbox" id="toggle-incognito-mode" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
 
-    <!-- In-Player Controls & Speed Multipliers -->
-    <div class="toggle-card" id="player-buttons-card">
-      <div class="label-group">
-        <span class="setting-label">In-Player Bar & Speeds</span>
-        <span class="setting-desc">Rewind buttons, speed popover, live badge</span>
+      <!-- Force DVR Without Login -->
+      <div class="toggle-card" id="incognito-mode-card">
+        <div class="label-group">
+          <span class="setting-label">Force DVR (Incognito)</span>
+          <span class="setting-desc">Enable DVR when logged out or guest</span>
+        </div>
+        <label class="switch" for="toggle-incognito-mode">
+          <input type="checkbox" id="toggle-incognito-mode" checked>
+          <span class="slider"></span>
+        </label>
       </div>
-      <label class="switch" for="toggle-player-buttons">
-        <input type="checkbox" id="toggle-player-buttons" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
 
-    <!-- Keyboard Shortcuts -->
-    <div class="toggle-card" id="hotkeys-card">
-      <div class="label-group">
-        <span class="setting-label">Keyboard Shortcuts</span>
-        <span class="setting-desc">J/L seek, Shift+L live, [/] speeds</span>
+      <!-- In-Player Controls Bar -->
+      <div class="toggle-card" id="player-buttons-card">
+        <div class="label-group">
+          <span class="setting-label">In-Player Controls Bar</span>
+          <span class="setting-desc">Rewind & forward buttons, live badge</span>
+        </div>
+        <label class="switch" for="toggle-player-buttons">
+          <input type="checkbox" id="toggle-player-buttons" checked>
+          <span class="slider"></span>
+        </label>
       </div>
-      <label class="switch" for="toggle-hotkeys">
-        <input type="checkbox" id="toggle-hotkeys" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
 
-    <!-- Primary Seek Step Chips -->
-    <div class="option-card" id="seek-step-card">
-      <span class="setting-label">Primary Seek Step</span>
-      <div class="step-chips">
-        <button type="button" class="step-chip" data-step="5">5s</button>
-        <button type="button" class="step-chip active" data-step="10">10s</button>
-        <button type="button" class="step-chip" data-step="15">15s</button>
-        <button type="button" class="step-chip" data-step="30">30s</button>
+      <!-- Playback Speed Button -->
+      <div class="toggle-card" id="speed-button-card">
+        <div class="label-group">
+          <span class="setting-label">Playback Speed Button</span>
+          <span class="setting-desc">Show 1x-2x speed button & popover</span>
+        </div>
+        <label class="switch" for="toggle-speed-button">
+          <input type="checkbox" id="toggle-speed-button" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- In-Player Rewind Buttons Checkbox Group -->
+      <div class="option-card" id="rewind-buttons-card">
+        <div class="label-group">
+          <span class="setting-label">In-Player Rewind Buttons</span>
+          <span class="setting-desc">Select rewind buttons to display in player controls</span>
+        </div>
+        <div class="rewind-grid">
+          <label class="rewind-item" for="rewind-btn-30s">
+            <input type="checkbox" id="rewind-btn-30s" data-step="30s">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">30 sec</span>
+          </label>
+          <label class="rewind-item" for="rewind-btn-1m">
+            <input type="checkbox" id="rewind-btn-1m" data-step="1m" checked>
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">1 min</span>
+          </label>
+          <label class="rewind-item" for="rewind-btn-3m">
+            <input type="checkbox" id="rewind-btn-3m" data-step="3m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">3 min</span>
+          </label>
+          <label class="rewind-item" for="rewind-btn-5m">
+            <input type="checkbox" id="rewind-btn-5m" data-step="5m" checked>
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">5 min</span>
+          </label>
+          <label class="rewind-item" for="rewind-btn-10m">
+            <input type="checkbox" id="rewind-btn-10m" data-step="10m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">10 min</span>
+          </label>
+          <label class="rewind-item" for="rewind-btn-30m">
+            <input type="checkbox" id="rewind-btn-30m" data-step="30m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">30 min</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- In-Player Forward Buttons Checkbox Group -->
+      <div class="option-card" id="forward-buttons-card">
+        <div class="label-group">
+          <span class="setting-label">In-Player Forward Buttons</span>
+          <span class="setting-desc">Select forward buttons to display in player controls</span>
+        </div>
+        <div class="rewind-grid">
+          <label class="rewind-item" for="fwd-btn-30s">
+            <input type="checkbox" id="fwd-btn-30s" data-step="30s">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">30 sec</span>
+          </label>
+          <label class="rewind-item" for="fwd-btn-1m">
+            <input type="checkbox" id="fwd-btn-1m" data-step="1m" checked>
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">1 min</span>
+          </label>
+          <label class="rewind-item" for="fwd-btn-3m">
+            <input type="checkbox" id="fwd-btn-3m" data-step="3m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">3 min</span>
+          </label>
+          <label class="rewind-item" for="fwd-btn-5m">
+            <input type="checkbox" id="fwd-btn-5m" data-step="5m" checked>
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">5 min</span>
+          </label>
+          <label class="rewind-item" for="fwd-btn-10m">
+            <input type="checkbox" id="fwd-btn-10m" data-step="10m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">10 min</span>
+          </label>
+          <label class="rewind-item" for="fwd-btn-30m">
+            <input type="checkbox" id="fwd-btn-30m" data-step="30m">
+            <span class="rewind-checkbox-box">
+              <svg class="rewind-check-icon" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.8 6.8L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="rewind-name">30 min</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Prevent Home Autoplay -->
+      <div class="toggle-card" id="home-autoplay-card">
+        <div class="label-group">
+          <span class="setting-label">Prevent Home Autoplay</span>
+          <span class="setting-desc">Block frontpage carousel stream</span>
+        </div>
+        <label class="switch" for="toggle-prevent-home-autoplay">
+          <input type="checkbox" id="toggle-prevent-home-autoplay">
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
+  </div>
 
-    <!-- Prevent Home Autoplay -->
-    <div class="toggle-card" id="home-autoplay-card">
-      <div class="label-group">
-        <span class="setting-label">Prevent Home Autoplay</span>
-        <span class="setting-desc">Block frontpage carousel stream</span>
+  <!-- Tab 2: Shortcuts Panel -->
+  <div class="tab-panel" id="tab-shortcuts">
+    <div class="settings-list">
+      <!-- Keyboard Shortcuts Toggle -->
+      <div class="toggle-card" id="hotkeys-card">
+        <div class="label-group">
+          <span class="setting-label">Keyboard Shortcuts</span>
+          <span class="setting-desc">Enable seek, speed, and live edge hotkeys</span>
+        </div>
+        <label class="switch" for="toggle-hotkeys">
+          <input type="checkbox" id="toggle-hotkeys" checked>
+          <span class="slider"></span>
+        </label>
       </div>
-      <label class="switch" for="toggle-prevent-home-autoplay">
-        <input type="checkbox" id="toggle-prevent-home-autoplay">
-        <span class="slider"></span>
-      </label>
+
+      <!-- Primary Seek Step Chips -->
+      <div class="option-card" id="seek-step-card">
+        <span class="setting-label">Primary Seek Step</span>
+        <span class="setting-desc">Step size for J / L and Arrow key shortcuts</span>
+        <div class="step-chips">
+          <button type="button" class="step-chip" data-step="5">5s</button>
+          <button type="button" class="step-chip active" data-step="10">10s</button>
+          <button type="button" class="step-chip" data-step="15">15s</button>
+          <button type="button" class="step-chip" data-step="30">30s</button>
+        </div>
+      </div>
+
+      <!-- Shortcuts Cheatsheet -->
+      <div class="shortcuts-card" id="shortcuts-card">
+        <div class="shortcuts-title">Available Shortcuts</div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>J</kbd> / <kbd>←</kbd></div>
+          <div class="shortcut-desc">Rewind primary step</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>L</kbd> / <kbd>→</kbd></div>
+          <div class="shortcut-desc">Forward primary step</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>←</kbd></div>
+          <div class="shortcut-desc">Rewind 30 seconds</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>→</kbd></div>
+          <div class="shortcut-desc">Forward 30 seconds</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>0</kbd></div>
+          <div class="shortcut-desc">Skip to live edge</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>[</kbd> / <kbd>]</kbd></div>
+          <div class="shortcut-desc">Decrease / increase speed</div>
+        </div>
+      </div>
     </div>
   </div>
 

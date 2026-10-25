@@ -1,7 +1,7 @@
 # Twitch DVR - Store Listing & AMO Description
 
 ## Summary (max 250 characters)
-Rewind live Twitch streams, use dedicated 0.5x–2x playback speed controls, quick-rewind buttons, and force DVR availability without requiring a login or Turbo.
+Rewind live Twitch streams, use dedicated 0.5x–2x playback speed controls, customizable quick-seek buttons, and force DVR availability without requiring a login or Turbo.
 
 ## Full Description
 
@@ -9,10 +9,13 @@ Twitch DVR unlocks full DVR rewinding controls directly inside the live Twitch v
 
 Key Features:
 - Native Live Stream Rewind: Scrub backwards through hours of live broadcast history directly on the player timeline.
-- Instant Quick-Seek Buttons: Dedicated in-player « 10s and « 30s buttons to instantly rewind key moments with zero buffering lag.
-- Unlocked DVR Without Login: Unlocks Twitch's internal DVR functionality across channels without requiring an active Twitch Turbo subscription or login.
+- Customizable In-Player Quick-Seek Buttons: Select which quick-seek buttons you want in the player bar (30s, 1m, 3m, 5m, 10m, and 30m for both rewind and forward).
+- Dedicated Speed Button Toggle: Show or hide the 1x-2x speed button and flyout directly from the extension popup.
+- Proactive VOD Lookup: Background GraphQL discovery immediately queries the stream manifest on load to activate the DVR seekbar reliably.
+- Unlocked DVR Without Login: Enables DVR functionality across channels without requiring an active Twitch Turbo subscription or login.
 - In-Player Playback Speed Control: Integrated speed selector supporting 0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 1.75x, and 2.0x playback speeds with automatic reset upon catching up to live.
-- Interactive Live / Go Live Badge: Displays real-time sync state. When rewound, clicking "GO LIVE" immediately returns to the live broadcast.
+- Interactive Live / Go Live Badge: Displays real-time sync state. When rewound, clicking "GO LIVE" immediately returns to the live broadcast edge.
+- Muted Native Player Styling: Clean dark slate design that integrates naturally with Twitch's native player aesthetic without fluorescent glows or distracting neon pulses.
 - Single-Page Application Clean Navigation: Resets internal stream status upon channel transitions to prevent stale broadcast IDs.
 - Optional Homepage Carousel Autoplay Prevention: Stops the Twitch frontpage carousel from automatically blasting video audio when opening Twitch.
 - Complete Keyboard Shortcut Support:
@@ -31,4 +34,4 @@ No external servers, no tracking, no analytics, and zero telemetry. Settings are
 - Appearance
 
 ## Tags
-twitch, dvr, rewind, live stream, video, player, playback speed
+twitch, dvr, rewind, live stream, video, player, playback speed, seek
