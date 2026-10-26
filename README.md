@@ -3,7 +3,7 @@
 **Rewind live Twitch streams, use dedicated in-player playback speed controls, customizable quick-seek buttons, and force DVR availability without requiring a login.**
 
 [![Firefox Add-on](https://img.shields.io/badge/Firefox-WebExtension%20MV3-FF7139?logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/twitch-dvr/)
-[![Version](https://img.shields.io/badge/version-v1.0-38BDF8)](https://github.com/PlasmaDrifter/twitch-DVR)
+[![Version](https://img.shields.io/badge/version-v1.1-38BDF8)](https://github.com/PlasmaDrifter/twitch-DVR)
 [![License](https://img.shields.io/badge/license-MIT-22C55E)](LICENSE)
 [![Twitch](https://img.shields.io/badge/Twitch-Supported-9146FF?logo=twitch&logoColor=white)](https://twitch.tv)
 
@@ -11,7 +11,7 @@
 
 ## Overview
 
-**Twitch DVR** is a lightweight, private WebExtension for Firefox and Zen Browser that brings native DVR functionality to live Twitch streams. It seamlessly integrates clean player controls into Twitch's video control bar, allowing you to rewind live broadcasts, watch at custom playback speeds (0.5x–2x), configure quick-seek steps, and return to the live edge instantly.
+**Twitch DVR** is a lightweight, private WebExtension for Firefox and Zen Browser that brings native DVR functionality to live Twitch streams. It seamlessly integrates clean player controls into Twitch's video control bar, allowing you to rewind live broadcasts, watch at custom playback speeds (0.5x–2x), capture lossless broadcast clips, record live streams directly in 1080p MP4, configure quick-seek steps, and return to the live edge instantly.
 
 Unlike standard Twitch playback which restricts live scrubbing to Turbo subscribers on select partner channels, Twitch DVR unlocks client-side DVR controls across all live streams with active VOD archiving without requiring a Twitch Turbo subscription or user account login.
 
@@ -43,6 +43,8 @@ Install directly from the official Mozilla Add-ons directory:
 ## Key Features
 
 - **Live Stream DVR Rewinding**: Scrub backward and forward through hours of live broadcast history directly on the player timeline.
+- **Lossless Server DVR Live Recording ([REC] Button)**: Record live streams in pristine 1080p60 MP4 directly from Twitch broadcast archives without re-encoding, CPU overhead, or pixelation.
+- **One-Click Quick Clip ([Clip 2m])**: Instantly save the last 30s to 5m of stream history, fully synchronized with your current playhead position even when rewound.
 - **Customizable In-Player Quick-Seek Buttons**: Choose which buttons appear in the player controls (30s, 1m, 3m, 5m, 10m, 30m for both rewind and forward).
 - **Proactive VOD Discovery**: Background GraphQL lookup immediately queries the streamer's active broadcast manifest on load, activating the DVR seekbar reliably.
 - **Reliable Live-Edge Transition**: Seamlessly transitions from live stream playback into DVR mode without stalling, dropping buffer, or stuttering.

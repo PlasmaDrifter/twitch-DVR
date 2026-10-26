@@ -26,6 +26,10 @@
     enabled: true,
     enablePlayerButtons: true,
     enableSpeedButton: true,
+    enableClipButton: true,
+    enableRecordButton: true,
+    clipDurationSeconds: 120,
+    recordingBitrate: 8500000,
     enableHotkeys: true,
     seekStepSeconds: 10,
     rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
@@ -43,6 +47,10 @@
         enabled: true,
         enablePlayerButtons: true,
         enableSpeedButton: true,
+        enableClipButton: true,
+        enableRecordButton: true,
+        clipDurationSeconds: 120,
+        recordingBitrate: 8500000,
         enableHotkeys: true,
         seekStepSeconds: 10,
         rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
@@ -93,7 +101,7 @@
     return el;
   }
 
-  function showHud(text) {
+  function showHud(text, durationMs) {
     let hud = document.getElementById("twitch-dvr-hud");
     if (!hud) {
       hud = document.createElement("div");
@@ -108,9 +116,10 @@
     hud.classList.add("visible");
 
     if (hudTimeout) clearTimeout(hudTimeout);
+    const timeout = durationMs || (text.includes("failed") || text.includes("unavailable") ? 3500 : 1800);
     hudTimeout = setTimeout(() => {
       hud.classList.remove("visible");
-    }, 1100);
+    }, timeout);
   }
 
   function getSeekbarElement() {
@@ -382,6 +391,12 @@
       lastUpdateTick = now;
       updateLiveBadge(video);
     });
+
+    video.addEventListener("playing", () => {
+      if (settings.enabled && settings.enableClipButton !== false) {
+        ensureStreamRecorder(video);
+      }
+    });
   }
 
   function updateLiveBadge(video) {
@@ -576,6 +591,537 @@
   }
 
   // -------------------------------------------------------------
+  // Stream Recording & Quick Clip Engine (Unified & Retrospective)
+  // -------------------------------------------------------------
+  let activeMediaRecorder = null;
+  let activeRecordedStream = null;
+  let webmHeaderBytes = null;
+  let rollingMediaChunks = []; // [{ time: number, data: Blob }]
+  let recordingStartTime = 0;
+  let recordingTimerInterval = null;
+  let isRecordingLive = false;
+
+  function getChannelName() {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    if (!parts.length) return "twitch";
+    const reserved = ["directory", "videos", "p", "settings", "friends", "subscriptions", "inventory", "wallet", "messages"];
+    if (reserved.includes(parts[0].toLowerCase())) return "twitch";
+    return parts[0].toLowerCase();
+  }
+
+  function getVideoStream(video) {
+    if (!video) return null;
+    // Capture at stable 30fps to guarantee smooth hardware/software encoding without dropping frames in Firefox
+    if (typeof video.captureStream === "function") {
+      try {
+        return video.captureStream(30);
+      } catch (e) { }
+    }
+    if (typeof video.mozCaptureStream === "function") {
+      try {
+        return video.mozCaptureStream(30);
+      } catch (e) { }
+    }
+    return null;
+  }
+
+  function getSupportedMimeType() {
+    // Prioritize clean, widely supported codecs in Firefox
+    const types = [
+      "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=h264,opus",
+      "video/webm",
+      "video/mp4",
+    ];
+    for (const t of types) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) {
+        return t;
+      }
+    }
+    return "";
+  }
+
+  function getRecordingElapsedText() {
+    if (!recordingStartTime) return "REC";
+    const elapsedSec = Math.floor((Date.now() - recordingStartTime) / 1000);
+    const mins = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
+    const secs = String(elapsedSec % 60).padStart(2, "0");
+    return `${mins}:${secs}`;
+  }
+
+  function broadcastRecordingStatus(isRecording, elapsed) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "TDVR_RECORD_STATUS",
+        isRecording,
+        elapsed: elapsed || getRecordingElapsedText(),
+      });
+    } catch (e) { }
+  }
+
+  function updateRecButtonState() {
+    const recBtn = document.getElementById("tdvr-record-button");
+    const recText = document.getElementById("tdvr-rec-text");
+    if (!recBtn || !recText) return;
+
+    if (isRecordingLive) {
+      recBtn.classList.add("recording");
+      recBtn.title = "Stop Live Recording";
+      recText.textContent = getRecordingElapsedText();
+    } else {
+      recBtn.classList.remove("recording");
+      recBtn.title = "Start Live Recording";
+      recText.textContent = "REC";
+    }
+  }
+
+  function cleanupStreamRecorder() {
+    if (activeMediaRecorder && activeMediaRecorder.state !== "inactive") {
+      try { activeMediaRecorder.stop(); } catch (e) { }
+    }
+    activeMediaRecorder = null;
+
+    if (activeRecordedStream) {
+      try {
+        activeRecordedStream.getTracks().forEach((t) => t.stop());
+      } catch (e) { }
+      activeRecordedStream = null;
+    }
+
+    webmHeaderBytes = null;
+    rollingMediaChunks = [];
+  }
+
+  // -------------------------------------------------------------
+  // Dedicated Live Session Recorder (Fallback for unarchived streams)
+  // -------------------------------------------------------------
+  let liveSessionRecorder = null;
+  let liveSessionChunks = [];
+  let liveSessionStream = null;
+
+  function startDedicatedLiveRecorder(video) {
+    cleanupDedicatedLiveRecorder();
+    const v = video || getActiveVideo();
+    if (!v) return;
+
+    const stream = getVideoStream(v);
+    if (!stream) return;
+    liveSessionStream = stream;
+
+    const mime = getSupportedMimeType();
+    const videoBps = settings.recordingBitrate || 6000000;
+    const options = {
+      videoBitsPerSecond: videoBps,
+      audioBitsPerSecond: 160000,
+    };
+    if (mime) options.mimeType = mime;
+
+    try {
+      liveSessionRecorder = new MediaRecorder(stream, options);
+    } catch (e) {
+      try {
+        liveSessionRecorder = new MediaRecorder(stream);
+      } catch (err) {
+        liveSessionRecorder = null;
+        return;
+      }
+    }
+
+    liveSessionChunks = [];
+    liveSessionRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        liveSessionChunks.push(e.data);
+      }
+    };
+    liveSessionRecorder.start(1000);
+  }
+
+  function cleanupDedicatedLiveRecorder() {
+    if (liveSessionRecorder && liveSessionRecorder.state !== "inactive") {
+      try { liveSessionRecorder.stop(); } catch (e) { }
+    }
+    liveSessionRecorder = null;
+    if (liveSessionStream) {
+      try {
+        liveSessionStream.getTracks().forEach((t) => t.stop());
+      } catch (e) { }
+      liveSessionStream = null;
+    }
+    liveSessionChunks = [];
+  }
+
+  function saveDedicatedLiveRecording(elapsedSec) {
+    if (!liveSessionChunks || liveSessionChunks.length === 0) {
+      showHud("Recording empty");
+      cleanupDedicatedLiveRecorder();
+      return;
+    }
+
+    const durLabel = elapsedSec >= 60 ? `${Math.round(elapsedSec / 60)}m` : `${elapsedSec}s`;
+    const mime = liveSessionRecorder?.mimeType || getSupportedMimeType() || "video/webm";
+    const blob = new Blob(liveSessionChunks, { type: mime });
+    const url = URL.createObjectURL(blob);
+    const channel = getChannelName();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const ext = mime.includes("mp4") ? "mp4" : "webm";
+    const filename = `TwitchDVR_${channel}_Recording_${durLabel}_${timestamp}.${ext}`;
+
+    downloadMediaBlob(url, filename);
+    showHud(`Saved ${durLabel} Recording`);
+    cleanupDedicatedLiveRecorder();
+  }
+
+  function downloadMediaBlob(url, filename) {
+    chrome.runtime.sendMessage(
+      {
+        type: "DOWNLOAD_MEDIA",
+        url: url,
+        filename: filename,
+      },
+      (res) => {
+        if (!res?.success) {
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+      }
+    );
+  }
+
+  async function parseWebmHeader(firstBlob) {
+    try {
+      const buffer = await firstBlob.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      // Search for WebM Cluster marker: 0x1F, 0x43, 0xB6, 0x75
+      for (let i = 0; i <= bytes.length - 4; i++) {
+        if (bytes[i] === 0x1f && bytes[i + 1] === 0x43 && bytes[i + 2] === 0xb6 && bytes[i + 3] === 0x75) {
+          webmHeaderBytes = bytes.slice(0, i);
+          return firstBlob.slice(i);
+        }
+      }
+      webmHeaderBytes = bytes;
+      return null;
+    } catch (e) {
+      webmHeaderBytes = firstBlob;
+      return null;
+    }
+  }
+
+  function ensureStreamRecorder(video) {
+    const v = video || getActiveVideo();
+    if (!v) return null;
+    if (activeMediaRecorder && activeMediaRecorder.state === "recording") {
+      return activeMediaRecorder;
+    }
+
+    cleanupStreamRecorder();
+
+    const stream = getVideoStream(v);
+    if (!stream) return null;
+    activeRecordedStream = stream;
+
+    const mime = getSupportedMimeType();
+    const videoBps = settings.recordingBitrate || 6000000;
+    const options = {
+      videoBitsPerSecond: videoBps,
+      audioBitsPerSecond: 160000,
+    };
+    if (mime) options.mimeType = mime;
+
+    try {
+      activeMediaRecorder = new MediaRecorder(stream, options);
+    } catch (e) {
+      try {
+        activeMediaRecorder = new MediaRecorder(stream);
+      } catch (err) {
+        return null;
+      }
+    }
+
+    webmHeaderBytes = null;
+    rollingMediaChunks = [];
+
+    activeMediaRecorder.ondataavailable = async (e) => {
+      if (!e.data || e.data.size === 0) return;
+      const now = Date.now();
+
+      if (!webmHeaderBytes) {
+        const cluster0 = await parseWebmHeader(e.data);
+        if (cluster0 && cluster0.size > 0) {
+          rollingMediaChunks.push({ time: now, data: cluster0 });
+        }
+        return;
+      }
+
+      rollingMediaChunks.push({ time: now, data: e.data });
+
+      // Retain window: max clip duration + safety margin (up to 330 seconds)
+      // If manual recording is currently active, do not discard chunks recorded since recordingStartTime
+      const maxClipSec = Math.max(settings.clipDurationSeconds || 120, 300);
+      const clipCutoff = now - (maxClipSec + 30) * 1000;
+      const retainCutoff = (isRecordingLive && recordingStartTime > 0)
+        ? Math.min(clipCutoff, recordingStartTime)
+        : clipCutoff;
+
+      while (rollingMediaChunks.length > 0 && rollingMediaChunks[0].time < retainCutoff) {
+        rollingMediaChunks.shift();
+      }
+    };
+
+    activeMediaRecorder.start(1000);
+    return activeMediaRecorder;
+  }
+
+  function triggerLocalBufferClip(durSec) {
+    const durLabel = durSec >= 60 ? `${Math.round(durSec / 60)}m` : `${durSec}s`;
+    const v = getActiveVideo();
+    if (!activeMediaRecorder || activeMediaRecorder.state !== "recording") {
+      ensureStreamRecorder(v);
+      showHud("Buffering clip... try again in a moment");
+      return;
+    }
+
+    if (!webmHeaderBytes || rollingMediaChunks.length === 0) {
+      showHud("Buffering clip... stream history starting");
+      return;
+    }
+
+    const now = Date.now();
+    const cutoff = now - (durSec * 1000);
+    const selected = rollingMediaChunks.filter((item) => item.time >= cutoff);
+
+    if (selected.length === 0) {
+      showHud("Not enough stream history buffered yet");
+      return;
+    }
+
+    const actualSec = Math.round(selected.length);
+    const actualLabel = actualSec >= 60 ? `${Math.round(actualSec / 60)}m` : `${actualSec}s`;
+    const mime = activeMediaRecorder.mimeType || getSupportedMimeType() || "video/webm";
+    const chunks = [webmHeaderBytes, ...selected.map((item) => item.data)];
+    const blob = new Blob(chunks, { type: mime });
+    const url = URL.createObjectURL(blob);
+    const channel = getChannelName();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `TwitchDVR_${channel}_Clip_Last_${actualLabel}_${timestamp}.webm`;
+
+    downloadMediaBlob(url, filename);
+    showHud(`Saved Last ${actualLabel} Clip`);
+  }
+
+  function formatTimeLabel(sec) {
+    if (!sec || !isFinite(sec)) return "0s";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    if (h > 0) return `${h}h${m.toString().padStart(2, "0")}m`;
+    if (m > 0) return `${m}m${s.toString().padStart(2, "0")}s`;
+    return `${s}s`;
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window || !e.data) return;
+    if (e.data.type === "TDVR_CLIP_PROGRESS") {
+      const label = e.data.isRecording ? "recording" : "clip";
+      showHud(`Downloading ${label}: ${e.data.percent}%`);
+    } else if (e.data.type === "TDVR_CLIP_COMPLETE") {
+      const durSec = e.data.actualDuration || settings.clipDurationSeconds || 120;
+      const durLabel = durSec >= 60 ? `${Math.round(durSec / 60)}m` : `${durSec}s`;
+      if (e.data.isRecording) {
+        showHud(`Saved ${durLabel} Recording`);
+      } else if (e.data.isRewound && e.data.targetEndTime) {
+        showHud(`Saved ${durLabel} Clip at ${formatTimeLabel(e.data.targetEndTime)}`);
+      } else {
+        showHud(`Saved Last ${durLabel} Clip`);
+      }
+    } else if (e.data.type === "TDVR_CLIP_ERROR") {
+      showHud(`Download failed: ${e.data.error || "Download error"}`, 4000);
+    }
+  });
+
+  function triggerQuickClip(durationSeconds) {
+    const durSec = durationSeconds || settings.clipDurationSeconds || 120;
+    const durLabel = durSec >= 60 ? `${Math.round(durSec / 60)}m` : `${durSec}s`;
+    const channel = getChannelName();
+    const vodId = document.documentElement.dataset.twitchDvrVodId;
+
+    const video = getActiveVideo();
+    const isRewound = checkIfRewound(video);
+    const liveEdge = getLiveEdge(video);
+    const curr = (video && isFinite(video.currentTime)) ? video.currentTime : null;
+
+    let offsetFromLive = null;
+    if (curr !== null && liveEdge !== null && isFinite(liveEdge)) {
+      offsetFromLive = Math.max(0, liveEdge - curr);
+    } else if (curr !== null && video && isFinite(video.duration) && video.duration > 0 && video.duration < 1e7) {
+      offsetFromLive = Math.max(0, video.duration - curr);
+    }
+
+    const playheadInfo = {
+      isRewound,
+      currentTime: curr,
+      liveEdge,
+      offsetFromLive,
+    };
+
+    console.log("[Twitch DVR] triggerQuickClip requested:", {
+      channel,
+      vodId,
+      durSec,
+      playheadInfo,
+    });
+
+    if (isRewound && curr !== null && curr > 0) {
+      showHud(`Clipping ${durLabel} at ${formatTimeLabel(curr)}...`);
+    } else {
+      showHud(`Clipping last ${durLabel}...`);
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: "FETCH_DVR_CLIP",
+        channel: channel,
+        vodId: vodId || undefined,
+        durationSeconds: durSec,
+        playheadInfo: playheadInfo,
+      },
+      (res) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Twitch DVR] Runtime error fetching DVR clip:", chrome.runtime.lastError);
+        }
+
+        console.log("[Twitch DVR] FETCH_DVR_CLIP response:", res);
+
+        if (res && res.success && Array.isArray(res.segmentUrls) && res.segmentUrls.length > 0) {
+          // Delegate fetching and downloading to MAIN world (gql-hook.js) with Twitch origin to satisfy CORS
+          window.postMessage(
+            {
+              type: "TDVR_DOWNLOAD_SERVER_CLIP",
+              clipData: res,
+            },
+            "*"
+          );
+          return;
+        }
+
+        // Only fallback to local rolling buffer if we actually have at least 80% of requested duration buffered!
+        const minRequiredChunks = Math.floor(durSec * 0.8);
+        if (rollingMediaChunks.length >= minRequiredChunks) {
+          showHud(`Server archive unavailable; saving local buffer (${durLabel})...`);
+          triggerLocalBufferClip(durSec);
+        } else {
+          const errDetail = res?.error ? `Clip unavailable: ${res.error}` : "Stream archive unavailable on Twitch";
+          showHud(errDetail, 4000);
+        }
+      }
+    );
+  }
+
+  function startLiveRecording() {
+    if (isRecordingLive) return;
+
+    const v = getActiveVideo();
+    isRecordingLive = true;
+    recordingStartTime = Date.now();
+    updateRecButtonState();
+
+    // Start dedicated local recorder in background as fallback
+    startDedicatedLiveRecorder(v);
+
+    if (recordingTimerInterval) clearInterval(recordingTimerInterval);
+    recordingTimerInterval = setInterval(() => {
+      if (!isRecordingLive) return;
+      updateRecButtonState();
+      broadcastRecordingStatus(true, getRecordingElapsedText());
+    }, 1000);
+
+    broadcastRecordingStatus(true, "00:00");
+    showHud("Live Recording Started");
+  }
+
+  function stopLiveRecording() {
+    if (!isRecordingLive) return;
+
+    const startTime = recordingStartTime;
+    const elapsedSec = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+    const durLabel = elapsedSec >= 60 ? `${Math.round(elapsedSec / 60)}m` : `${elapsedSec}s`;
+
+    isRecordingLive = false;
+    recordingStartTime = 0;
+
+    if (recordingTimerInterval) {
+      clearInterval(recordingTimerInterval);
+      recordingTimerInterval = null;
+    }
+
+    updateRecButtonState();
+    broadcastRecordingStatus(false, "00:00");
+
+    // Stop dedicated recorder to finalize data chunks
+    if (liveSessionRecorder && liveSessionRecorder.state === "recording") {
+      try { liveSessionRecorder.stop(); } catch (e) { }
+    }
+
+    const channel = getChannelName();
+    const vodId = document.documentElement.dataset.twitchDvrVodId;
+
+    const video = getActiveVideo();
+    const isRewound = checkIfRewound(video);
+    const liveEdge = getLiveEdge(video);
+    const curr = (video && isFinite(video.currentTime)) ? video.currentTime : null;
+
+    let offsetFromLive = null;
+    if (curr !== null && liveEdge !== null && isFinite(liveEdge)) {
+      offsetFromLive = Math.max(0, liveEdge - curr);
+    } else if (curr !== null && video && isFinite(video.duration) && video.duration > 0 && video.duration < 1e7) {
+      offsetFromLive = Math.max(0, video.duration - curr);
+    }
+
+    const playheadInfo = {
+      isRewound,
+      currentTime: curr,
+      liveEdge,
+      offsetFromLive,
+    };
+
+    showHud(`Saving ${durLabel} Recording...`);
+
+    chrome.runtime.sendMessage(
+      {
+        type: "FETCH_DVR_CLIP",
+        channel: channel,
+        vodId: vodId || undefined,
+        durationSeconds: elapsedSec,
+        playheadInfo: playheadInfo,
+        isRecording: true,
+      },
+      (res) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Twitch DVR] Runtime error fetching DVR recording:", chrome.runtime.lastError);
+        }
+
+        if (res && res.success && Array.isArray(res.segmentUrls) && res.segmentUrls.length > 0) {
+          cleanupDedicatedLiveRecorder();
+          window.postMessage(
+            {
+              type: "TDVR_DOWNLOAD_SERVER_CLIP",
+              clipData: res,
+            },
+            "*"
+          );
+          return;
+        }
+
+        // Fallback to local dedicated recorder if server DVR was unavailable
+        saveDedicatedLiveRecording(elapsedSec);
+      }
+    );
+  }
+
+  // -------------------------------------------------------------
   // Centered Controls Injection
   // -------------------------------------------------------------
   let injectionScheduled = false;
@@ -726,10 +1272,86 @@
 
       speedTrigger.addEventListener("click", toggleSpeedFlyout);
 
-      // Centered layout: [Rewind Buttons] -> [LIVE Badge] -> [Forward Buttons] -> [Speed Trigger]
+      // Centered layout:
+      // [Rewind Buttons] -> [LIVE Badge] -> [Forward Buttons] -> <50px Gap> -> [Clip Button] -> [REC Button] -> <50px Gap> -> [Speed Trigger]
       centerWrap.appendChild(liveBadge);
       forwardButtons.forEach((btn) => centerWrap.appendChild(btn));
+
+      // Quick Clip Button
+      const clipButton = document.createElement("button");
+      clipButton.type = "button";
+      clipButton.id = "tdvr-clip-button";
+      clipButton.className = "tdvr-clip-btn";
+      const clipDurSec = settings.clipDurationSeconds || 120;
+      const clipDurLabel = clipDurSec >= 60 ? `${Math.round(clipDurSec / 60)}m` : `${clipDurSec}s`;
+      clipButton.title = `Quick Clip: Save last ${clipDurLabel}`;
+
+      const clipSvg = createSvgElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2.2",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      });
+      const clipPath1 = createSvgElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" });
+      const clipPath2 = createSvgElement("polyline", { points: "7 10 12 15 17 10" });
+      const clipPath3 = createSvgElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" });
+      clipSvg.append(clipPath1, clipPath2, clipPath3);
+
+      const clipText = document.createElement("span");
+      clipText.id = "tdvr-clip-text";
+      clipText.textContent = `Clip ${clipDurLabel}`;
+      clipButton.append(clipSvg, clipText);
+
+      clipButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        triggerQuickClip(settings.clipDurationSeconds || 120);
+      });
+
+      // Live Record Button
+      const recordButton = document.createElement("button");
+      recordButton.type = "button";
+      recordButton.id = "tdvr-record-button";
+      recordButton.className = isRecordingLive ? "tdvr-rec-btn recording" : "tdvr-rec-btn";
+      recordButton.title = isRecordingLive ? "Stop Live Recording" : "Start Live Recording";
+
+      const recDot = document.createElement("span");
+      recDot.className = "tdvr-rec-dot";
+
+      const recText = document.createElement("span");
+      recText.id = "tdvr-rec-text";
+      recText.textContent = isRecordingLive ? getRecordingElapsedText() : "REC";
+      recordButton.append(recDot, recText);
+
+      recordButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (isRecordingLive) {
+          stopLiveRecording();
+        } else {
+          startLiveRecording();
+        }
+      });
+
+      // Capture Group: Apply 50px gap (size of 1x button) to first visible capture button
+      let firstCaptureButton = null;
+      if (settings.enableClipButton !== false) {
+        firstCaptureButton = clipButton;
+        centerWrap.appendChild(clipButton);
+      }
+      if (settings.enableRecordButton !== false) {
+        if (!firstCaptureButton) firstCaptureButton = recordButton;
+        centerWrap.appendChild(recordButton);
+      }
+      if (firstCaptureButton) {
+        firstCaptureButton.classList.add("tdvr-group-gap");
+      }
+
+      // Compact Speed Trigger Button (placed to the right of record button with matching 50px gap)
       if (settings.enableSpeedButton !== false) {
+        speedTrigger.classList.add("tdvr-group-gap");
         centerWrap.appendChild(speedTrigger);
       }
 
@@ -737,13 +1359,20 @@
       lastRewoundState = null;
     }
 
-    if (video) updateLiveBadge(video);
+    if (video) {
+      updateLiveBadge(video);
+      if (settings.enabled && settings.enableClipButton !== false) {
+        ensureStreamRecorder(video);
+      }
+    }
   }
 
   // Keyboard Shortcuts Handler
   window.addEventListener(
     "keydown",
     (e) => {
+      // NEVER intercept native browser shortcuts (Ctrl+R reload, Ctrl+W close tab, Alt+Left, etc.)
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (!settings.enabled || !settings.enableHotkeys) return;
 
       const activeEl = document.activeElement;
@@ -752,7 +1381,8 @@
         (activeEl.tagName === "INPUT" ||
           activeEl.tagName === "TEXTAREA" ||
           activeEl.isContentEditable ||
-          activeEl.getAttribute("role") === "textbox")
+          activeEl.getAttribute("role") === "textbox" ||
+          (activeEl.closest && activeEl.closest('[contenteditable="true"], [role="textbox"], .chat-input, [data-a-target="chat-input"]')))
       ) {
         return;
       }
@@ -786,10 +1416,45 @@
         if (idx === -1) idx = 2;
         const newSpeed = SPEED_OPTIONS[Math.min(SPEED_OPTIONS.length - 1, idx + 1)];
         setPlaybackSpeed(newSpeed);
+      } else if (e.code === "KeyC") {
+        e.preventDefault();
+        triggerQuickClip(settings.clipDurationSeconds || 120);
+      } else if (e.code === "KeyR") {
+        e.preventDefault();
+        if (isRecordingLive) {
+          stopLiveRecording();
+        } else {
+          startLiveRecording();
+        }
       }
     },
     true
   );
+
+  // Runtime message handler from popup
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.type === "TDVR_TRIGGER_CLIP") {
+      triggerQuickClip(msg.duration || settings.clipDurationSeconds || 120);
+      sendResponse({ success: true });
+      return true;
+    }
+    if (msg?.type === "TDVR_TOGGLE_RECORD") {
+      if (isRecordingLive) {
+        stopLiveRecording();
+      } else {
+        startLiveRecording();
+      }
+      sendResponse({ success: true, isRecording: isRecordingLive });
+      return true;
+    }
+    if (msg?.type === "TDVR_GET_RECORD_STATUS") {
+      sendResponse({
+        isRecording: isRecordingLive,
+        elapsed: getRecordingElapsedText(),
+      });
+      return true;
+    }
+  });
 
   window.addEventListener("popstate", scheduleInjection);
   setInterval(() => {

@@ -1,33 +1,31 @@
-# Twitch DVR v1.0 - AMO Release Notes
+# Twitch DVR v1.1 - Release Notes
 
-What's New in Version 1.0 (Initial Release):
+What's New in Version 1.1:
 
-- Live Stream DVR Rewinding:
-  Enables full timeline scrub and rewinding on live Twitch broadcasts without requiring Turbo or user login.
+- Lossless Server DVR Live Recording ([REC] Button):
+  Directly downloads pristine, untouched 1080p60 MP4 broadcast segments from Twitch's server archives with zero re-encoding, zero CPU/GPU overhead, and bit-for-bit source fidelity.
+  Includes a dedicated local session recorder fallback for channels without active VOD archives.
 
-- Customizable In-Player Quick-Seek Buttons:
-  Configure which quick-seek buttons appear in your player controls (30s, 1m, 3m, 5m, 10m, and 30m for both rewind and forward).
+- Quick Clip Button ([Clip 2m]):
+  One-click instant clipping of recent broadcast history (configurable 30s to 5m in popup settings).
+  Fully playhead-aware: when rewound in the timeline, clips the window leading up to your current viewing position rather than the live broadcast edge.
 
-- Proactive VOD Manifest Discovery:
-  Automatic GraphQL background lookup discovers active broadcast IDs on channel load, activating the DVR seekbar reliably.
+- Centered Player Controls Layout:
+  Reorganized bottom player controls with dedicated group gaps separating rewind/forward navigation, clipping/recording actions, and playback speed controls.
 
-- Reliable Live-Edge Seek:
-  Seamless transition from live stream playback into DVR mode without stalling, dropping buffer, or requiring manual timeline clicks.
+- Real-Time Download Progress Feedback:
+  Live HUD status displaying segment download percentages and completion confirmation directly over the video player.
 
-- Instant Return to Live:
-  Clicking "GO LIVE" immediately returns playback to the live broadcast edge cleanly.
+- Enhanced Twitch CDN Host Permissions:
+  Added host permissions for Twitch CloudFront and Fastly CDN endpoints to guarantee seamless broadcast segment fetching and high-speed multi-threaded downloads.
 
-- Playback Speed Multipliers (0.5x to 2x):
-  Choose between 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, and 2x speeds with automatic 1x reset upon reaching the live edge.
+---
 
-- Dedicated Speed Button Toggle:
-  Optionally hide or show the in-player speed button and flyout directly from the extension popup.
-
-- Muted Native Twitch Styling:
-  Refined dark slate surfaces and platinum icons designed to blend seamlessly with Twitch's native player aesthetic without fluorescent glows or neon pulses.
-
-- Configurable Keyboard Hotkeys:
-  Full hotkey support for seeking (J / L / Arrows), jumping to live (Shift+L / 0), and speed adjustments ([ / ]).
-
-- Homepage Autoplay Prevention:
-  Optionally blocks unwanted autoplay on the Twitch homepage carousel while keeping stream previews intact.
+Previous Changes (v1.0):
+- Live stream DVR timeline scrubbing and rewinding without requiring Turbo or user login.
+- In-player quick-seek buttons (30s, 1m, 3m, 5m, 10m, and 30m).
+- Proactive GraphQL VOD manifest discovery.
+- Playback speed multipliers (0.5x to 2x) with auto-reset upon reaching the live edge.
+- Dedicated speed button toggle and native Twitch settings gear menu integration.
+- Keyboard shortcuts for seeking, jumping to live, and speed control.
+- Homepage carousel autoplay prevention.

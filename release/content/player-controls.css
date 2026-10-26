@@ -18,6 +18,11 @@
   white-space: nowrap;
 }
 
+/* Proportional gap separating button clusters (matches the ~50px width of the 1x button) */
+.tdvr-group-gap {
+  margin-left: 50px;
+}
+
 /* Rewind & Forward Buttons */
 .tdvr-icon-btn {
   background: rgba(24, 24, 27, 0.8);
@@ -103,6 +108,102 @@
 
 .tdvr-speed-trigger:hover svg {
   color: #ffffff;
+}
+
+/* Quick Clip Button */
+.tdvr-clip-btn {
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #efeff1;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tdvr-clip-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.tdvr-clip-btn:active {
+  transform: scale(0.95);
+}
+
+.tdvr-clip-btn svg {
+  color: #adadb8;
+  transition: color 0.15s ease;
+}
+
+.tdvr-clip-btn:hover svg {
+  color: #ffffff;
+}
+
+/* Live Record Button */
+.tdvr-rec-btn {
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #efeff1;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tdvr-rec-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.tdvr-rec-btn:active {
+  transform: scale(0.95);
+}
+
+.tdvr-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+.tdvr-rec-btn.recording {
+  background: rgba(185, 28, 28, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+}
+
+.tdvr-rec-btn.recording .tdvr-rec-dot {
+  animation: tdvr-pulse 1s infinite alternate;
+}
+
+@keyframes tdvr-pulse {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0.3; transform: scale(0.8); }
 }
 
 /* Clean, Muted Live Badge */

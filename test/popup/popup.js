@@ -19,10 +19,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   const homeAutoplayCard = document.getElementById("home-autoplay-card");
   const reloadBtn = document.getElementById("reload-tab-btn");
 
+  // Tabs
   const tabBtnControls = document.getElementById("tab-btn-controls");
+  const tabBtnRecordings = document.getElementById("tab-btn-recordings");
   const tabBtnShortcuts = document.getElementById("tab-btn-shortcuts");
   const tabControls = document.getElementById("tab-controls");
+  const tabRecordings = document.getElementById("tab-recordings");
   const tabShortcuts = document.getElementById("tab-shortcuts");
+
+  // Recording & Clips Elements
+  const toggleClipButton = document.getElementById("toggle-clip-button");
+  const clipButtonCard = document.getElementById("clip-button-card");
+  const clipDurationCard = document.getElementById("clip-duration-card");
+  const clipChips = document.querySelectorAll("#clip-duration-card .clip-chip");
+  const bitrateChips = document.querySelectorAll("#record-bitrate-chips .clip-chip");
+  const btnSaveClipNow = document.getElementById("btn-save-clip-now");
+  const saveClipBtnText = document.getElementById("save-clip-btn-text");
+
+  const toggleRecordButton = document.getElementById("toggle-record-button");
+  const recordButtonCard = document.getElementById("record-button-card");
+  const recordActionCard = document.getElementById("record-action-card");
+  const btnToggleRecordNow = document.getElementById("btn-toggle-record-now");
+  const recordBtnText = document.getElementById("record-btn-text");
+  const popupRecDot = document.getElementById("popup-rec-dot");
+  const recordStatusRow = document.getElementById("record-status-row");
+  const recordTimerText = document.getElementById("record-timer-text");
 
   const statusDot = document.getElementById("status-dot");
   const statusChannel = document.getElementById("status-channel");
@@ -30,25 +51,29 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let activeTwitchTabId = null;
   let isInitialized = false;
+  let currentClipSec = 120;
 
   function switchTab(tabName) {
-    if (tabName === "shortcuts") {
-      tabBtnShortcuts.classList.add("active");
-      tabBtnControls.classList.remove("active");
-      tabShortcuts.classList.add("active");
-      tabControls.classList.remove("active");
-    } else {
-      tabBtnControls.classList.add("active");
-      tabBtnShortcuts.classList.remove("active");
-      tabControls.classList.add("active");
-      tabShortcuts.classList.remove("active");
-    }
+    const tabs = [
+      { btn: tabBtnControls, panel: tabControls, name: "controls" },
+      { btn: tabBtnRecordings, panel: tabRecordings, name: "recordings" },
+      { btn: tabBtnShortcuts, panel: tabShortcuts, name: "shortcuts" },
+    ];
+
+    tabs.forEach((t) => {
+      if (t.name === tabName) {
+        t.btn?.classList.add("active");
+        t.panel?.classList.add("active");
+      } else {
+        t.btn?.classList.remove("active");
+        t.panel?.classList.remove("active");
+      }
+    });
   }
 
-  if (tabBtnControls && tabBtnShortcuts) {
-    tabBtnControls.addEventListener("click", () => switchTab("controls"));
-    tabBtnShortcuts.addEventListener("click", () => switchTab("shortcuts"));
-  }
+  if (tabBtnControls) tabBtnControls.addEventListener("click", () => switchTab("controls"));
+  if (tabBtnRecordings) tabBtnRecordings.addEventListener("click", () => switchTab("recordings"));
+  if (tabBtnShortcuts) tabBtnShortcuts.addEventListener("click", () => switchTab("shortcuts"));
 
   function updateDependencies(isEnabled) {
     const cards = [
@@ -57,12 +82,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       speedButtonCard,
       rewindButtonsCard,
       forwardButtonsCard,
+      clipButtonCard,
+      clipDurationCard,
+      recordButtonCard,
+      recordActionCard,
       hotkeysCard,
       seekStepCard,
       homeAutoplayCard,
       shortcutsCard,
     ];
-    const inputs = [toggleIncognitoMode, togglePlayerButtons, toggleSpeedButton, toggleHotkeys, toggleHomeAutoplay];
+    const inputs = [
+      toggleIncognitoMode,
+      togglePlayerButtons,
+      toggleSpeedButton,
+      toggleClipButton,
+      toggleRecordButton,
+      toggleHotkeys,
+      toggleHomeAutoplay,
+    ];
 
     cards.forEach((c) => {
       if (c) {
@@ -78,6 +115,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     stepChips.forEach((chip) => {
       chip.disabled = !isEnabled;
     });
+
+    clipChips.forEach((chip) => {
+      chip.disabled = !isEnabled;
+    });
+
+    if (btnSaveClipNow) btnSaveClipNow.disabled = !isEnabled;
+    if (btnToggleRecordNow) btnToggleRecordNow.disabled = !isEnabled;
 
     rewindInputs.forEach((inp) => {
       inp.disabled = !isEnabled;
@@ -130,6 +174,45 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  function setSelectedClipDuration(sec) {
+    clipChips.forEach((chip) => {
+      if (parseInt(chip.dataset.clipSec, 10) === sec) {
+        chip.classList.add("active");
+      } else {
+        chip.classList.remove("active");
+      }
+    });
+    const label = sec >= 60 ? `${Math.round(sec / 60)}m` : `${sec}s`;
+    if (saveClipBtnText) {
+      saveClipBtnText.textContent = `Save Last ${label} Clip Now`;
+    }
+  }
+
+  function setSelectedBitrate(bps) {
+    bitrateChips.forEach((chip) => {
+      if (parseInt(chip.dataset.bitrate, 10) === bps) {
+        chip.classList.add("active");
+      } else {
+        chip.classList.remove("active");
+      }
+    });
+  }
+
+  function updatePopupRecordingUI(isRecording, elapsed) {
+    if (isRecording) {
+      btnToggleRecordNow.classList.add("recording");
+      if (recordBtnText) recordBtnText.textContent = "Stop & Save Recording";
+      if (popupRecDot) popupRecDot.style.display = "inline-block";
+      if (recordStatusRow) recordStatusRow.style.display = "flex";
+      if (recordTimerText) recordTimerText.textContent = `Recording: ${elapsed || "00:00"}`;
+    } else {
+      btnToggleRecordNow.classList.remove("recording");
+      if (recordBtnText) recordBtnText.textContent = "Start Live Recording";
+      if (popupRecDot) popupRecDot.style.display = "none";
+      if (recordStatusRow) recordStatusRow.style.display = "none";
+    }
+  }
+
   // 1. Load stored state
   const res = await chrome.storage.local.get({
     enabled: true,
@@ -137,6 +220,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     preventHomeAutoplay: false,
     enablePlayerButtons: true,
     enableSpeedButton: true,
+    enableClipButton: true,
+    enableRecordButton: true,
+    clipDurationSeconds: 120,
+    recordingBitrate: 8500000,
     enableHotkeys: true,
     seekStepSeconds: 10,
     rewindButtons: { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false },
@@ -153,11 +240,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         : true;
   togglePlayerButtons.checked = res.enablePlayerButtons !== false;
   toggleSpeedButton.checked = res.enableSpeedButton !== false;
+  toggleClipButton.checked = res.enableClipButton !== false;
+  toggleRecordButton.checked = res.enableRecordButton !== false;
   toggleHotkeys.checked = res.enableHotkeys !== false;
   toggleHomeAutoplay.checked = res.preventHomeAutoplay === true;
 
   const currentStep = res.seekStepSeconds || 10;
   setSelectedStep(currentStep);
+
+  currentClipSec = res.clipDurationSeconds || 120;
+  setSelectedClipDuration(currentClipSec);
+
+  const currentBitrate = res.recordingBitrate || 8500000;
+  setSelectedBitrate(currentBitrate);
 
   const savedRewind = res.rewindButtons || { "30s": false, "1m": true, "3m": false, "5m": true, "10m": false, "30m": false };
   rewindInputs.forEach((inp) => {
@@ -194,6 +289,59 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   toggleSpeedButton.addEventListener("change", async () => {
     await chrome.storage.local.set({ enableSpeedButton: toggleSpeedButton.checked });
+  });
+
+  toggleClipButton.addEventListener("change", async () => {
+    await chrome.storage.local.set({ enableClipButton: toggleClipButton.checked });
+  });
+
+  clipChips.forEach((chip) => {
+    chip.addEventListener("click", async () => {
+      const sec = parseInt(chip.dataset.clipSec, 10);
+      currentClipSec = sec;
+      setSelectedClipDuration(sec);
+      await chrome.storage.local.set({ clipDurationSeconds: sec });
+    });
+  });
+
+  bitrateChips.forEach((chip) => {
+    chip.addEventListener("click", async () => {
+      const bps = parseInt(chip.dataset.bitrate, 10);
+      setSelectedBitrate(bps);
+      await chrome.storage.local.set({ recordingBitrate: bps });
+    });
+  });
+
+  btnSaveClipNow.addEventListener("click", async () => {
+    if (!activeTwitchTabId) return;
+    try {
+      btnSaveClipNow.disabled = true;
+      if (saveClipBtnText) saveClipBtnText.textContent = "Capturing Clip...";
+      await chrome.tabs.sendMessage(activeTwitchTabId, {
+        type: "TDVR_TRIGGER_CLIP",
+        duration: currentClipSec,
+      });
+      setTimeout(() => {
+        btnSaveClipNow.disabled = false;
+        setSelectedClipDuration(currentClipSec);
+      }, 1500);
+    } catch (e) {
+      btnSaveClipNow.disabled = false;
+      setSelectedClipDuration(currentClipSec);
+    }
+  });
+
+  toggleRecordButton.addEventListener("change", async () => {
+    await chrome.storage.local.set({ enableRecordButton: toggleRecordButton.checked });
+  });
+
+  btnToggleRecordNow.addEventListener("click", async () => {
+    if (!activeTwitchTabId) return;
+    try {
+      await chrome.tabs.sendMessage(activeTwitchTabId, {
+        type: "TDVR_TOGGLE_RECORD",
+      });
+    } catch (e) { }
   });
 
   rewindInputs.forEach((inp) => {
@@ -260,6 +408,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (activeTwitchTabId) {
     reloadBtn.disabled = false;
     reloadBtn.title = "Reload Twitch Tab";
+
+    // Query active tab for recording status
+    try {
+      chrome.tabs.sendMessage(activeTwitchTabId, { type: "TDVR_GET_RECORD_STATUS" }, (resp) => {
+        if (resp && typeof resp.isRecording === "boolean") {
+          updatePopupRecordingUI(resp.isRecording, resp.elapsed);
+        }
+      });
+    } catch (e) { }
   } else {
     reloadBtn.disabled = true;
     reloadBtn.title = "No Twitch tab found";
@@ -340,6 +497,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.streamStatus) {
       renderStatus(changes.streamStatus.newValue);
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === "TDVR_RECORD_STATUS") {
+      updatePopupRecordingUI(msg.isRecording, msg.elapsed);
     }
   });
 });

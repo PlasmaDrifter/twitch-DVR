@@ -63,7 +63,7 @@
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          query: "query($login:String!){user(login:$login){videos(first:5,sort:TIME,type:ARCHIVE){edges{node{id createdAt status}}}}}",
+          query: "query($login:String!){user(login:$login){stream{id archiveVideo{id status createdAt}} videos(first:5,sort:TIME,type:ARCHIVE){edges{node{id createdAt status}}}}}",
           variables: { login: channel },
         }),
       });
@@ -71,20 +71,29 @@
 
       if (!res.ok) return null;
       const data = await res.json();
+      const liveArchive = data?.data?.user?.stream?.archiveVideo;
       const edges = data?.data?.user?.videos?.edges;
-      if (Array.isArray(edges)) {
-        const recording = edges.find((e) => e?.node?.status === "RECORDING");
-        if (recording?.node?.id) {
-          globalThis.vodID = recording.node.id;
-          if (recording.node.createdAt) {
-            globalThis.vodCreatedAt = recording.node.createdAt;
-            try {
-              document.documentElement.dataset.twitchDvrCreatedAt = recording.node.createdAt;
-            } catch (e) { }
-          }
-          broadcastStatus();
-          return recording.node.id;
+      let targetNode = null;
+      if (liveArchive?.id && liveArchive?.status === "RECORDING") {
+        targetNode = liveArchive;
+      } else if (Array.isArray(edges)) {
+        const recordingEdge = edges.find((e) => e?.node?.status === "RECORDING");
+        if (recordingEdge?.node?.id) targetNode = recordingEdge.node;
+      }
+
+      if (targetNode?.id) {
+        globalThis.vodID = targetNode.id;
+        try {
+          document.documentElement.dataset.twitchDvrVodId = targetNode.id;
+        } catch (e) { }
+        if (targetNode.createdAt) {
+          globalThis.vodCreatedAt = targetNode.createdAt;
+          try {
+            document.documentElement.dataset.twitchDvrCreatedAt = targetNode.createdAt;
+          } catch (e) { }
         }
+        broadcastStatus();
+        return targetNode.id;
       }
     } catch (e) {
       if (timeoutId) clearTimeout(timeoutId);
@@ -124,6 +133,7 @@
       globalThis.vodCreatedAt = null;
       try {
         delete document.documentElement.dataset.twitchDvrCreatedAt;
+        delete document.documentElement.dataset.twitchDvrVodId;
       } catch (e) { }
       broadcastStatus();
       startVodLookup(newChannel);
@@ -549,4 +559,95 @@
       headers,
     });
   };
+
+  // -------------------------------------------------------------
+  // CORS-Compliant Server DVR Clip Downloader (runs in MAIN world)
+  // -------------------------------------------------------------
+  async function handleServerClipDownload(clipData) {
+    const { segmentUrls, initMapUrl, filename, mimeType, actualDuration, isRecording } = clipData || {};
+    if (!Array.isArray(segmentUrls) || segmentUrls.length === 0) {
+      window.postMessage({ type: "TDVR_CLIP_ERROR", error: "No segments found in clip metadata" }, "*");
+      return;
+    }
+
+    const durLabel = actualDuration >= 60 ? `${Math.round(actualDuration / 60)}m` : `${actualDuration}s`;
+    const totalSegments = segmentUrls.length;
+    const buffers = [];
+
+    try {
+      if (initMapUrl) {
+        try {
+          const initRes = await origFetch(initMapUrl, { mode: "cors", credentials: "omit" });
+          if (initRes.ok) {
+            buffers.push(await initRes.arrayBuffer());
+          }
+        } catch (e) {
+          console.warn(LOG_PREFIX, "Failed to fetch initMapUrl:", e);
+        }
+      }
+
+      const batchSize = 5;
+      for (let i = 0; i < totalSegments; i += batchSize) {
+        const batch = segmentUrls.slice(i, i + batchSize);
+        const percent = Math.round((i / totalSegments) * 100);
+        window.postMessage({ type: "TDVR_CLIP_PROGRESS", percent, isRecording: Boolean(isRecording) }, "*");
+
+        const downloaded = await Promise.all(
+          batch.map(async (url) => {
+            let lastErr = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const sRes = await origFetch(url, { mode: "cors", credentials: "omit" });
+                if (!sRes.ok) throw new Error(`HTTP ${sRes.status}`);
+                return await sRes.arrayBuffer();
+              } catch (err) {
+                lastErr = err;
+                await new Promise((r) => setTimeout(r, 400));
+              }
+            }
+            throw new Error(`Segment fetch error: ${lastErr?.message || "timeout"}`);
+          })
+        );
+        for (const b of downloaded) buffers.push(b);
+      }
+
+      window.postMessage({ type: "TDVR_CLIP_PROGRESS", percent: 100, isRecording: Boolean(isRecording) }, "*");
+
+      const blob = new Blob(buffers, { type: mimeType || "video/mp4" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      const defaultName = isRecording ? `TwitchDVR_Recording_${durLabel}.mp4` : `TwitchDVR_Clip_${durLabel}.mp4`;
+      a.download = filename || defaultName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(blobUrl);
+      }, 30000);
+
+      window.postMessage({
+        type: "TDVR_CLIP_COMPLETE",
+        filename: a.download,
+        actualDuration,
+        isRewound: Boolean(clipData?.isRewound),
+        targetEndTime: clipData?.targetEndTime || null,
+        isRecording: Boolean(isRecording),
+      }, "*");
+    } catch (err) {
+      console.error(LOG_PREFIX, "Server segment download error:", err);
+      window.postMessage({
+        type: "TDVR_CLIP_ERROR",
+        error: err?.message || String(err),
+      }, "*");
+    }
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window || !e.data) return;
+    if (e.data.type === "TDVR_DOWNLOAD_SERVER_CLIP") {
+      handleServerClipDownload(e.data.clipData);
+    }
+  });
 })();

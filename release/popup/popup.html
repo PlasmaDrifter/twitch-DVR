@@ -395,12 +395,13 @@
       border: none;
       border-bottom: 2px solid transparent;
       color: #9494a8;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      padding: 7px 0;
+      padding: 7px 2px;
       cursor: pointer;
       text-align: center;
       transition: all 0.15s ease;
+      white-space: nowrap;
     }
 
     .tab-btn:hover:not(.active) {
@@ -419,6 +420,106 @@
 
     .tab-panel.active {
       display: flex;
+    }
+
+    /* Clip Duration Chips */
+    .clip-chips {
+      display: flex;
+      gap: 5px;
+      margin-top: 7px;
+    }
+
+    .clip-chip {
+      flex: 1;
+      background: #181822;
+      border: 1px solid #232330;
+      color: #adadb8;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .clip-chip:hover {
+      background: #20202e;
+      color: #efeff1;
+    }
+
+    .clip-chip.active {
+      background: #772ce8;
+      border-color: #9146ff;
+      color: #ffffff;
+    }
+
+    /* Action Buttons (Popup Override) */
+    .action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      background: #1e1e28;
+      color: #dedee3;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 5px;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-top: 8px;
+    }
+
+    .action-btn:hover:not(:disabled) {
+      background: #2a2a38;
+      border-color: rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+    }
+
+    .action-btn.primary {
+      background: #772ce8;
+      border-color: #9146ff;
+      color: #ffffff;
+    }
+
+    .action-btn.primary:hover:not(:disabled) {
+      background: #5c16c5;
+    }
+
+    .action-btn.recording {
+      background: #991b1b;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+
+    .action-btn.recording:hover:not(:disabled) {
+      background: #b91c1c;
+    }
+
+    .action-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .record-status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ef4444;
+      margin-top: 6px;
+    }
+
+    .record-pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ef4444;
+      display: inline-block;
     }
 
     /* Shortcuts Cheatsheet Card */
@@ -494,7 +595,7 @@
       <div class="brand-dot"></div>
       <div class="title-group">
         <span class="title">Twitch DVR</span>
-        <span class="version-tag">1.0</span>
+        <span class="version-tag">1.11</span>
       </div>
     </div>
     <button id="reload-tab-btn" class="reload-icon-btn" type="button" title="Reload Twitch Tab" aria-label="Reload Twitch Tab">
@@ -517,12 +618,85 @@
 
   <!-- Tab Navigation -->
   <div class="tabs-bar">
-    <button type="button" class="tab-btn active" id="tab-btn-controls">Player Controls</button>
+    <button type="button" class="tab-btn active" id="tab-btn-recordings">Record & Clips</button>
+    <button type="button" class="tab-btn" id="tab-btn-controls">Player</button>
     <button type="button" class="tab-btn" id="tab-btn-shortcuts">Shortcuts</button>
   </div>
 
-  <!-- Tab 1: Controls Panel -->
-  <div class="tab-panel active" id="tab-controls">
+  <!-- Tab 1: Recording & Clips Panel -->
+  <div class="tab-panel active" id="tab-recordings">
+    <div class="settings-list">
+      <!-- Quick Clip Button Toggle -->
+      <div class="toggle-card" id="clip-button-card">
+        <div class="label-group">
+          <span class="setting-label">In-Player Clip Button</span>
+          <span class="setting-desc">Show Clip button in player controls</span>
+        </div>
+        <label class="switch" for="toggle-clip-button">
+          <input type="checkbox" id="toggle-clip-button" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Quick Clip Duration Selector & Direct Action -->
+      <div class="option-card" id="clip-duration-card">
+        <span class="setting-label">Quick Clip Duration</span>
+        <span class="setting-desc">Length of instant stream clip to capture</span>
+        <div class="clip-chips">
+          <button type="button" class="clip-chip" data-clip-sec="30">30s</button>
+          <button type="button" class="clip-chip" data-clip-sec="60">1m</button>
+          <button type="button" class="clip-chip active" data-clip-sec="120">2m</button>
+          <button type="button" class="clip-chip" data-clip-sec="300">5m</button>
+        </div>
+        <button type="button" class="action-btn primary" id="btn-save-clip-now" title="Capture and download clip now">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="save-clip-btn-text">Save Last 2m Clip Now</span>
+        </button>
+      </div>
+
+      <!-- Live Record Button Toggle -->
+      <div class="toggle-card" id="record-button-card">
+        <div class="label-group">
+          <span class="setting-label">In-Player Record Button</span>
+          <span class="setting-desc">Show REC button in player controls</span>
+        </div>
+        <label class="switch" for="toggle-record-button">
+          <input type="checkbox" id="toggle-record-button" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Manual Live Recording Action -->
+      <div class="option-card" id="record-action-card">
+        <span class="setting-label">Live Session Recording</span>
+        <span class="setting-desc">Record current stream session until stopped</span>
+        <button type="button" class="action-btn" id="btn-toggle-record-now" title="Toggle live stream recording">
+          <span class="record-pulse-dot" style="display:none;" id="popup-rec-dot"></span>
+          <span id="record-btn-text">Start Live Recording</span>
+        </button>
+        <div class="record-status-row" id="record-status-row" style="display:none;">
+          <span class="record-pulse-dot"></span>
+          <span id="record-timer-text">Recording: 00:00</span>
+        </div>
+        <div style="margin-top: 10px;">
+          <span class="setting-label">Recording Quality</span>
+          <span class="setting-desc">Native 60fps encoding bitrate</span>
+          <div class="clip-chips" id="record-bitrate-chips">
+            <button type="button" class="clip-chip" data-bitrate="5000000">5 Mbps</button>
+            <button type="button" class="clip-chip active" data-bitrate="8500000">8.5 Mbps (High)</button>
+            <button type="button" class="clip-chip" data-bitrate="12000000">12 Mbps (Ultra)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Controls Panel -->
+  <div class="tab-panel" id="tab-controls">
     <div class="settings-list">
       <!-- Enable Extension -->
       <div class="toggle-card" id="main-toggle-card">
@@ -713,7 +887,7 @@
     </div>
   </div>
 
-  <!-- Tab 2: Shortcuts Panel -->
+  <!-- Tab 3: Shortcuts Panel -->
   <div class="tab-panel" id="tab-shortcuts">
     <div class="settings-list">
       <!-- Keyboard Shortcuts Toggle -->
@@ -766,6 +940,14 @@
         <div class="shortcut-row">
           <div class="shortcut-keys"><kbd>[</kbd> / <kbd>]</kbd></div>
           <div class="shortcut-desc">Decrease / increase speed</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>C</kbd></div>
+          <div class="shortcut-desc">Save Quick Clip</div>
+        </div>
+        <div class="shortcut-row">
+          <div class="shortcut-keys"><kbd>R</kbd></div>
+          <div class="shortcut-desc">Start / stop recording</div>
         </div>
       </div>
     </div>

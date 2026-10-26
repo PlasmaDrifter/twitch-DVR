@@ -1,14 +1,16 @@
 # Twitch DVR - Store Listing & AMO Description
 
 ## Summary (max 250 characters)
-Rewind live Twitch streams, use dedicated 0.5x–2x playback speed controls, customizable quick-seek buttons, and force DVR availability without requiring a login or Turbo.
+Rewind live Twitch streams, record lossless 1080p clips and live broadcasts, use dedicated 0.5x–2x playback speed controls, and force DVR availability without requiring a login or Turbo.
 
 ## Full Description
 
-Twitch DVR unlocks full DVR rewinding controls directly inside the live Twitch video player. It allows you to scrub back through the stream, catch moments you missed, adjust playback speeds up to 2x, and return to the live edge with a single click.
+Twitch DVR unlocks full DVR rewinding controls directly inside the live Twitch video player. It allows you to scrub back through the stream, catch moments you missed, adjust playback speeds up to 2x, capture lossless clips, and return to the live edge with a single click.
 
 Key Features:
 - Native Live Stream Rewind: Scrub backwards through hours of live broadcast history directly on the player timeline.
+- Lossless Server DVR Live Recording ([REC] Button): Record live streams in pristine 1080p60 MP4 directly from Twitch broadcast archives without re-encoding or performance degradation.
+- One-Click Quick Clip ([Clip 2m]): Instantly save the last 30s to 5m of stream history, fully synchronized with your current playhead position even when rewound.
 - Customizable In-Player Quick-Seek Buttons: Select which quick-seek buttons you want in the player bar (30s, 1m, 3m, 5m, 10m, and 30m for both rewind and forward).
 - Dedicated Speed Button Toggle: Show or hide the 1x-2x speed button and flyout directly from the extension popup.
 - Proactive VOD Lookup: Background GraphQL discovery immediately queries the stream manifest on load to activate the DVR seekbar reliably.
