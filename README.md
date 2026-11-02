@@ -103,24 +103,6 @@ twitch-DVR/
 
 ---
 
-## Building and Packaging
-
-### 1. Build Production Release (AMO Package)
-```bash
-cd release
-./build.sh
-```
-This generates:
-- `release/twitch-dvr-v1.0.zip` (clean archive ready for AMO submission)
-- `release/twitch-dvr.xpi` (local testing file)
-
-### 2. Linting for Mozilla Add-on Store (AMO)
-```bash
-npx web-ext lint --source-dir release --ignore-files "build.sh" "*.zip" "*.xpi" "AMO_*.md"
-```
-
----
-
 ## Privacy & Security
 
 - Zero analytics, zero trackers, zero telemetry, and zero remote dependencies.
