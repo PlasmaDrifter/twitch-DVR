@@ -66,43 +66,6 @@ Install directly from the official Mozilla Add-ons directory:
 
 ---
 
-## Project Structure
-
-```text
-twitch-DVR/
-├── README.md
-├── LICENSE
-├── release/
-│   ├── manifest.json
-│   ├── background.js
-│   ├── build.sh
-│   ├── AMO_DESCRIPTION.md
-│   ├── AMO_RELEASE_NOTES.md
-│   ├── icons/
-│   ├── content/
-│   │   ├── gql-hook.js
-│   │   ├── content-bridge.js
-│   │   ├── player-controls.js
-│   │   └── player-controls.css
-│   └── popup/
-│       ├── popup.html
-│       └── popup.js
-├── store_assets/
-│   ├── icon-128.png
-│   ├── icon-512.png
-│   ├── twitch-player-live.jpg
-│   └── twitch-dvr-popup.png
-└── test/
-    ├── manifest.json
-    ├── background.js
-    ├── build.sh
-    ├── icons/
-    ├── content/
-    └── popup/
-```
-
----
-
 ## Privacy & Security
 
 - Zero analytics, zero trackers, zero telemetry, and zero remote dependencies.
