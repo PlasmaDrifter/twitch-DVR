@@ -36,7 +36,7 @@ Install directly from the official Mozilla Add-ons directory:
 ![Twitch DVR Live Player Controls](store_assets/twitch-player-live.jpg)
 
 ### Extension Settings Popup
-<img src="store_assets/twitch-dvr-popup.png" alt="Twitch DVR Settings Popup" width="340" />
+![Twitch DVR Settings Popup](store_assets/twitch-dvr-popup.png)
 
 ---
 
