@@ -391,12 +391,6 @@
       lastUpdateTick = now;
       updateLiveBadge(video);
     });
-
-    video.addEventListener("playing", () => {
-      if (settings.enabled && settings.enableClipButton !== false) {
-        ensureStreamRecorder(video);
-      }
-    });
   }
 
   function updateLiveBadge(video) {
@@ -591,12 +585,8 @@
   }
 
   // -------------------------------------------------------------
-  // Stream Recording & Quick Clip Engine (Unified & Retrospective)
+  // Stream Recording & Quick Clip Engine (Server DVR & On-Demand Fallback)
   // -------------------------------------------------------------
-  let activeMediaRecorder = null;
-  let activeRecordedStream = null;
-  let webmHeaderBytes = null;
-  let rollingMediaChunks = []; // [{ time: number, data: Blob }]
   let recordingStartTime = 0;
   let recordingTimerInterval = null;
   let isRecordingLive = false;
@@ -673,23 +663,6 @@
       recBtn.title = "Start Live Recording";
       recText.textContent = "REC";
     }
-  }
-
-  function cleanupStreamRecorder() {
-    if (activeMediaRecorder && activeMediaRecorder.state !== "inactive") {
-      try { activeMediaRecorder.stop(); } catch (e) { }
-    }
-    activeMediaRecorder = null;
-
-    if (activeRecordedStream) {
-      try {
-        activeRecordedStream.getTracks().forEach((t) => t.stop());
-      } catch (e) { }
-      activeRecordedStream = null;
-    }
-
-    webmHeaderBytes = null;
-    rollingMediaChunks = [];
   }
 
   // -------------------------------------------------------------
@@ -791,127 +764,6 @@
     );
   }
 
-  async function parseWebmHeader(firstBlob) {
-    try {
-      const buffer = await firstBlob.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      // Search for WebM Cluster marker: 0x1F, 0x43, 0xB6, 0x75
-      for (let i = 0; i <= bytes.length - 4; i++) {
-        if (bytes[i] === 0x1f && bytes[i + 1] === 0x43 && bytes[i + 2] === 0xb6 && bytes[i + 3] === 0x75) {
-          webmHeaderBytes = bytes.slice(0, i);
-          return firstBlob.slice(i);
-        }
-      }
-      webmHeaderBytes = bytes;
-      return null;
-    } catch (e) {
-      webmHeaderBytes = firstBlob;
-      return null;
-    }
-  }
-
-  function ensureStreamRecorder(video) {
-    const v = video || getActiveVideo();
-    if (!v) return null;
-    if (activeMediaRecorder && activeMediaRecorder.state === "recording") {
-      return activeMediaRecorder;
-    }
-
-    cleanupStreamRecorder();
-
-    const stream = getVideoStream(v);
-    if (!stream) return null;
-    activeRecordedStream = stream;
-
-    const mime = getSupportedMimeType();
-    const videoBps = settings.recordingBitrate || 6000000;
-    const options = {
-      videoBitsPerSecond: videoBps,
-      audioBitsPerSecond: 160000,
-    };
-    if (mime) options.mimeType = mime;
-
-    try {
-      activeMediaRecorder = new MediaRecorder(stream, options);
-    } catch (e) {
-      try {
-        activeMediaRecorder = new MediaRecorder(stream);
-      } catch (err) {
-        return null;
-      }
-    }
-
-    webmHeaderBytes = null;
-    rollingMediaChunks = [];
-
-    activeMediaRecorder.ondataavailable = async (e) => {
-      if (!e.data || e.data.size === 0) return;
-      const now = Date.now();
-
-      if (!webmHeaderBytes) {
-        const cluster0 = await parseWebmHeader(e.data);
-        if (cluster0 && cluster0.size > 0) {
-          rollingMediaChunks.push({ time: now, data: cluster0 });
-        }
-        return;
-      }
-
-      rollingMediaChunks.push({ time: now, data: e.data });
-
-      // Retain window: max clip duration + safety margin (up to 330 seconds)
-      // If manual recording is currently active, do not discard chunks recorded since recordingStartTime
-      const maxClipSec = Math.max(settings.clipDurationSeconds || 120, 300);
-      const clipCutoff = now - (maxClipSec + 30) * 1000;
-      const retainCutoff = (isRecordingLive && recordingStartTime > 0)
-        ? Math.min(clipCutoff, recordingStartTime)
-        : clipCutoff;
-
-      while (rollingMediaChunks.length > 0 && rollingMediaChunks[0].time < retainCutoff) {
-        rollingMediaChunks.shift();
-      }
-    };
-
-    activeMediaRecorder.start(1000);
-    return activeMediaRecorder;
-  }
-
-  function triggerLocalBufferClip(durSec) {
-    const durLabel = durSec >= 60 ? `${Math.round(durSec / 60)}m` : `${durSec}s`;
-    const v = getActiveVideo();
-    if (!activeMediaRecorder || activeMediaRecorder.state !== "recording") {
-      ensureStreamRecorder(v);
-      showHud("Buffering clip... try again in a moment");
-      return;
-    }
-
-    if (!webmHeaderBytes || rollingMediaChunks.length === 0) {
-      showHud("Buffering clip... stream history starting");
-      return;
-    }
-
-    const now = Date.now();
-    const cutoff = now - (durSec * 1000);
-    const selected = rollingMediaChunks.filter((item) => item.time >= cutoff);
-
-    if (selected.length === 0) {
-      showHud("Not enough stream history buffered yet");
-      return;
-    }
-
-    const actualSec = Math.round(selected.length);
-    const actualLabel = actualSec >= 60 ? `${Math.round(actualSec / 60)}m` : `${actualSec}s`;
-    const mime = activeMediaRecorder.mimeType || getSupportedMimeType() || "video/webm";
-    const chunks = [webmHeaderBytes, ...selected.map((item) => item.data)];
-    const blob = new Blob(chunks, { type: mime });
-    const url = URL.createObjectURL(blob);
-    const channel = getChannelName();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const filename = `TwitchDVR_${channel}_Clip_Last_${actualLabel}_${timestamp}.webm`;
-
-    downloadMediaBlob(url, filename);
-    showHud(`Saved Last ${actualLabel} Clip`);
-  }
-
   function formatTimeLabel(sec) {
     if (!sec || !isFinite(sec)) return "0s";
     const h = Math.floor(sec / 3600);
@@ -1007,15 +859,8 @@
           return;
         }
 
-        // Only fallback to local rolling buffer if we actually have at least 80% of requested duration buffered!
-        const minRequiredChunks = Math.floor(durSec * 0.8);
-        if (rollingMediaChunks.length >= minRequiredChunks) {
-          showHud(`Server archive unavailable; saving local buffer (${durLabel})...`);
-          triggerLocalBufferClip(durSec);
-        } else {
-          const errDetail = res?.error ? `Clip unavailable: ${res.error}` : "Stream archive unavailable on Twitch";
-          showHud(errDetail, 4000);
-        }
+        const errDetail = res?.error ? `Clip unavailable: ${res.error}` : "Stream archive unavailable on Twitch";
+        showHud(errDetail, 4000);
       }
     );
   }
@@ -1361,9 +1206,6 @@
 
     if (video) {
       updateLiveBadge(video);
-      if (settings.enabled && settings.enableClipButton !== false) {
-        ensureStreamRecorder(video);
-      }
     }
   }
 

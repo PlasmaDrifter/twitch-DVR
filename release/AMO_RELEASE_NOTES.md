@@ -1,25 +1,22 @@
-# Twitch DVR v1.1 - Release Notes
+# Twitch DVR v1.2 - Release Notes
 
-What's New in Version 1.1:
+What's New in Version 1.2:
 
-- Lossless Server DVR Live Recording ([REC] Button):
-  Directly downloads pristine, untouched 1080p60 MP4 broadcast segments from Twitch's server archives with zero re-encoding, zero CPU/GPU overhead, and bit-for-bit source fidelity.
-  Includes a dedicated local session recorder fallback for channels without active VOD archives.
+- Memory Leak Fix for Continuous & Overnight Playback:
+  Eliminated the 24/7 background MediaRecorder and video captureStream pipeline. Twitch DVR now runs with zero background buffer allocation while watching live streams, keeping memory usage completely flat even during multi-day or continuous overnight viewing sessions.
 
-- Quick Clip Button ([Clip 2m]):
-  One-click instant clipping of recent broadcast history (configurable 30s to 5m in popup settings).
-  Fully playhead-aware: when rewound in the timeline, clips the window leading up to your current viewing position rather than the live broadcast edge.
-
-- Centered Player Controls Layout:
-  Reorganized bottom player controls with dedicated group gaps separating rewind/forward navigation, clipping/recording actions, and playback speed controls.
-
-- Real-Time Download Progress Feedback:
-  Live HUD status displaying segment download percentages and completion confirmation directly over the video player.
-
-- Enhanced Twitch CDN Host Permissions:
-  Added host permissions for Twitch CloudFront and Fastly CDN endpoints to guarantee seamless broadcast segment fetching and high-speed multi-threaded downloads.
+- On-Demand Server DVR Optimization:
+  Quick Clip and Live Recording operate on-demand directly via Twitch's server CDN archives, preserving 1080p60 source fidelity with zero CPU/GPU overhead.
+  For live recording on channels without VOD archives, dedicated local recording is only initialized when the user clicks REC and is cleanly torn down immediately upon stopping.
 
 ---
+
+Previous Changes (v1.1):
+- Lossless Server DVR live recording ([REC] button) in pristine 1080p60 MP4.
+- Quick Clip button ([Clip 2m]) with playhead-aware clipping.
+- Centered player controls layout with balanced group spacing.
+- Real-time download progress HUD feedback.
+- Enhanced Twitch CDN host permissions for high-speed multi-threaded downloads.
 
 Previous Changes (v1.0):
 - Live stream DVR timeline scrubbing and rewinding without requiring Turbo or user login.

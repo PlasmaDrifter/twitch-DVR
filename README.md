@@ -3,7 +3,7 @@
 **Rewind live Twitch streams, use dedicated in-player playback speed controls, customizable quick-seek buttons, and force DVR availability without requiring a login.**
 
 [![Firefox Add-on](https://img.shields.io/badge/Firefox-WebExtension%20MV3-FF7139?logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/twitch-dvr/)
-[![Version](https://img.shields.io/badge/version-v1.1-38BDF8)](https://github.com/PlasmaDrifter/twitch-DVR)
+[![Version](https://img.shields.io/badge/version-v1.2-38BDF8)](https://github.com/PlasmaDrifter/twitch-DVR)
 [![License](https://img.shields.io/badge/license-MIT-22C55E)](LICENSE)
 [![Twitch](https://img.shields.io/badge/Twitch-Supported-9146FF?logo=twitch&logoColor=white)](https://twitch.tv)
 
